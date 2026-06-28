@@ -16,8 +16,6 @@ import { toRaw } from 'vue';
 import 'vue-router';
 import { createRouter, createWebHistory } from 'vue-router';
 
-// import { SwipeBack } from 'vue-swipe-back'
-
 let globalStore = null;
 const { t: i18n_global } = i18n.global;
 
@@ -197,8 +195,6 @@ router.beforeResolve(async (to, from) => {
         if (envNow?.data?.status === 'success') {
           const backend = envNow.data.data.backend;
           const version = envNow.data.data.version;
-          const hasNewVersion = envNow.data.data.hasNewVersion;
-          const latestVersion = envNow.data.data.latestVersion;
           if (backend !== storeEnv.backend || version !== storeEnv.version) {
             Toast.loading(i18n_global("globalNotify.refresh.backendChanged"), {
               cover: true,

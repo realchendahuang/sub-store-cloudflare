@@ -1,5 +1,4 @@
 import request from '@/api';
-import { semverMajorMinorGt } from '@/utils/semver';
 import { AxiosPromise } from 'axios';
 
 export function useEnvApi() {
@@ -26,21 +25,6 @@ export function useEnvApi() {
         url: '/api/env',
         method: 'get',
       }).then(async response => {
-        // try {
-        //   const latestVersion = (
-        //     await request({
-        //       url: 'https://api.github.com/repos/sub-store-org/Sub-Store/releases/latest',
-        //       method: 'get',
-        //     })
-        //   ).data.tag_name;
-        //   response.data.data.latestVersion = latestVersion;
-        //   response.data.data.hasNewVersion = semverMajorMinorGt(
-        //     latestVersion,
-        //     response.data.data.version
-        //   );
-        // } catch (e) {
-        //   console.error(e);
-        // }
         const expiry = Date.now() + 60 * 60 * 1000;
         const dataToCache = { data: response, expiry };
         localStorage.setItem(localStorageKey, JSON.stringify(dataToCache));

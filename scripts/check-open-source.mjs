@@ -16,6 +16,13 @@ const frontendDebugPatterns = [
 const removedFrontendFeaturePatterns = [
   [/\bincludeUnsupportedProxy\b/g, "removed preview option"],
   [/\bprettyYaml\b/g, "removed preview option"],
+  [/\bhasNewVersion\b/g, "removed upstream release reminder"],
+  [/\blatestVersion\b/g, "removed upstream release reminder"],
+  [/\buseChangelogs\b/g, "removed upstream changelog UI"],
+  [/\bVConsole\b/g, "removed frontend debug console"],
+  [/\bvconsole\b/g, "removed frontend debug console"],
+  [/\bgithubProxy\b/g, "removed GitHub proxy setting"],
+  [/\biconCollection\b/g, "removed icon collection UI"],
 ];
 const localeForbiddenKeys = [
   "filePage",
@@ -40,6 +47,9 @@ const localeForbiddenPatterns = [
   [/\bRewrite\b/gi, "removed proxy-tool deployment help text"],
   [/YM Peng/g, "removed upstream personal copy"],
   [/t\.me\/zhetengsha/g, "removed external script recommendation"],
+  [/\bhasNewVersion\b/g, "removed upstream release reminder"],
+  [/\blatestVersion\b/g, "removed upstream release reminder"],
+  [/\biconCollection\b/g, "removed icon collection locale key"],
   [/\bsyncConfig\b/g, "removed sync locale key"],
   [/\bshareManage\b/g, "removed share locale key"],
   [/\bshareEditor\b/g, "removed share locale key"],

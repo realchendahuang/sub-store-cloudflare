@@ -1,8 +1,6 @@
 import '@/assets/styles/fonts.scss';
 import '@/assets/styles/global.scss';
 import '@/assets/styles/overwritten_css_var.scss';
-// import VConsole from 'vconsole';
-// const vConsole = new VConsole();
 import SvgIcon from '@/components/SvgIcon.vue';
 import i18n from '@/locales';
 import '@/plugin/awesomeIcon';

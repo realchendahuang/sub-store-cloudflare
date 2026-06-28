@@ -18,7 +18,6 @@
         >
           <div class="icon-container">
             <nut-icon name="setting" size="22px" />
-            <div v-if="env.hasNewVersion" class="nut-badge__content sup is-dot"></div>
           </div>
           <span class="label" v-show="isExpanded">{{ $t('tabBar.my') }}</span>
         </div>
@@ -28,7 +27,6 @@
 </template>
 
 <script lang="ts" setup>
-import { useGlobalStore } from '@/store/global';
 import { useSystemStore } from "@/store/system";
 import { SIDEBAR_EXPANDED_BREAKPOINT } from "@/store/system";
 import { storeToRefs } from 'pinia';
@@ -62,10 +60,8 @@ const isExpanded = computed(() => {
   return windowWidth.value >= SIDEBAR_EXPANDED_BREAKPOINT;
 });
 
-const globalStore = useGlobalStore();
 const systemStore = useSystemStore();
 
-const { env } = storeToRefs(globalStore);
 const { navBarHeight } = storeToRefs(systemStore);
 
 </script>
@@ -85,7 +81,6 @@ const { navBarHeight } = storeToRefs(systemStore);
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 101;
     
-    // User requested border & card background
     background: var(--tab-bar-color);
     border: 1px solid var(--divider-color);
     border-radius: var(--item-card-radios, 20px);

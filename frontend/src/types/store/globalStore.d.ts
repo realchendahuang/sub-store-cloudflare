@@ -22,8 +22,6 @@ interface ENV {
   app?: string;
   runtime?: string;
   storage?: string;
-  hasNewVersion?: boolean;
-  latestVersion?: string;
   version?: string;
   feature?: any;
   backend?:

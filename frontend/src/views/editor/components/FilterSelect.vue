@@ -32,15 +32,6 @@
 <script lang="ts" setup>
   import { inject, ref, watch, onMounted } from 'vue';
   import tw from '@/assets/icons/tw.png';
-  import semverGt from 'semver/functions/gt';
-  import { useAppNotifyStore } from '@/store/appNotify';
-  import { storeToRefs } from 'pinia';
-  import { useGlobalStore } from '@/store/global';
-
-  const globalStore = useGlobalStore();
-  const { env } = storeToRefs(globalStore);
-
-  const { showNotify } = useAppNotifyStore();
 
   const { type, id } = defineProps<{
     type: string;
@@ -90,15 +81,6 @@
 
   const value = ref([]);
   const mode = ref();
-
-  // try {
-  //   if(!semverGt(env.value.version, '2.16.63')) {
-  //     showNotify({
-  //       title: `请更新后端, 版本应大于 2.16.63`,
-  //       type: 'danger',
-  //     });
-  //   }
-  // } catch (e) {}
 
   // 挂载时将 value 值指针指向 form 对应的数据
   onMounted(() => {

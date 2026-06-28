@@ -8,7 +8,7 @@
       size="22px"
     >
       <nut-tabbar-item class="tabbar-item" to="/subs" icon="link" />
-      <nut-tabbar-item class="tabbar-item" to="/my" icon="setting" :dot="env.hasNewVersion"/>
+      <nut-tabbar-item class="tabbar-item" to="/my" icon="setting" />
     </nut-tabbar>
   </div>
 </template>
@@ -29,8 +29,7 @@
 
   const globalStore = useGlobalStore();
   const {
-    bottomSafeArea,
-    env
+    bottomSafeArea
   } = storeToRefs(globalStore);
   const style = {
     height: `${bottomSafeArea.value + 12 + 44}px`,

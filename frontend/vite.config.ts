@@ -104,7 +104,6 @@ const viteConfig = defineConfig((mode: ConfigEnv) => {
               ) return 'editor';
               if (id.includes('vue-i18n') || id.includes('@intlify/')) return 'i18n';
               if (id.includes('@fortawesome/')) return 'icons';
-              if (id.includes('@vuepic/vue-datepicker')) return 'datepicker';
               if (id.includes('/vue/') || id.includes('/vue-router/') || id.includes('/pinia/') || id.includes('@vue/') || id.includes('@vueuse/')) return 'vue-vendor';
             }
           },
