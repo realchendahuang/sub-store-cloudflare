@@ -20,7 +20,7 @@
     "@codemirror/view": "^6.23.1",
     "@fortawesome/fontawesome-svg-core": "^6.1.1",
     "@fortawesome/free-solid-svg-icons": "^6.1.1",
-    "@fortawesome/vue-fontawesome": "^3.0.1",
+    "@fortawesome/vue-fontawesome": "^3.3.0",
     "@lezer/highlight": "^1.2.0",
     "@nutui/nutui": "^3.3.8",
     "@replit/codemirror-indentation-markers": "^6.5.0",
