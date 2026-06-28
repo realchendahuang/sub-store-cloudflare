@@ -5,7 +5,7 @@
     "d1DatabaseName": "sub-store-cloudflare",
     "adminHostname": "substore.example.com",
     "downloadHostname": "sub.example.com",
-    "downloadTargets": ["mihomo", "sing-box", "uri"]
+    "downloadTargets": ["mihomo", "stash", "surge", "loon", "qx", "shadowrocket", "sing-box", "uri"]
   },
   "access": {
     "enabled": true,

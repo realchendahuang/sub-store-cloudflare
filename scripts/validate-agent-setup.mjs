@@ -14,6 +14,7 @@ const BUILTIN_TEMPLATE_IDS = new Set([
   "loyalsoldier-blacklist",
   "ai-streaming-mihomo",
 ]);
+const SUPPORTED_TARGETS = new Set(["mihomo", "stash", "surge", "surge-mac", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"]);
 
 const errors = [];
 const warnings = [];
@@ -101,7 +102,7 @@ function validateDeployment(deployment) {
   if (deployment.workerName !== undefined && !stringValue(deployment.workerName)) errors.push("deployment.workerName cannot be empty");
   if (deployment.d1DatabaseName !== undefined && !stringValue(deployment.d1DatabaseName)) errors.push("deployment.d1DatabaseName cannot be empty");
   for (const target of array(deployment.downloadTargets)) {
-    if (!["mihomo", "sing-box", "v2ray", "uri", "json"].includes(String(target))) {
+    if (!SUPPORTED_TARGETS.has(String(target))) {
       errors.push(`deployment.downloadTargets contains unsupported target: ${target}`);
     }
   }

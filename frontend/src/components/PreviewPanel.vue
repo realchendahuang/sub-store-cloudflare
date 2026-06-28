@@ -40,6 +40,13 @@
   import v2ray from '@/assets/icons/v2ray.png';
   import singbox from '@/assets/icons/sing-box.png';
   import clashmeta from '@/assets/icons/clashmeta.png';
+  import stash from '@/assets/icons/stash.png';
+  import surge from '@/assets/icons/surge.png';
+  import loon from '@/assets/icons/loon.png';
+  import quanx from '@/assets/icons/quanx.png';
+  import shadowrocket from '@/assets/icons/shadowrocket.png';
+  import surfboard from '@/assets/icons/surfboard.png';
+  import egern from '@/assets/icons/egern.png';
   import logoIcon from '@/assets/icons/logo.png';
   import { useClipboard } from '@vueuse/core';
   import useV3Clipboard from 'vue-clipboard3';
@@ -157,6 +164,41 @@
       name: 'Mihomo',
       path: 'mihomo',
       icon: clashmeta,
+    },
+    {
+      name: 'Stash',
+      path: 'stash',
+      icon: stash,
+    },
+    {
+      name: 'Surge',
+      path: 'surge',
+      icon: surge,
+    },
+    {
+      name: 'Loon',
+      path: 'loon',
+      icon: loon,
+    },
+    {
+      name: 'Quantumult X',
+      path: 'qx',
+      icon: quanx,
+    },
+    {
+      name: 'Shadowrocket',
+      path: 'shadowrocket',
+      icon: shadowrocket,
+    },
+    {
+      name: 'Surfboard',
+      path: 'surfboard',
+      icon: surfboard,
+    },
+    {
+      name: 'Egern',
+      path: 'egern',
+      icon: egern,
     },
     {
       name: 'sing-box',

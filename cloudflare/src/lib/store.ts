@@ -6,6 +6,7 @@ import {
   DEFAULT_TEMPLATE_CONFIG,
   DEFAULT_TEMPLATE_ID,
 } from "./defaults";
+import { normalizeTargetAlias } from "./targets";
 import type {
   AppSettings,
   AppConfig,
@@ -643,7 +644,7 @@ function stringArray(value: unknown) {
 }
 
 function normalizeTargetValue(value: unknown): SubscriptionTarget {
-  return "mihomo";
+  return normalizeTargetAlias(value) || "mihomo";
 }
 
 function stringValue(value: unknown, fallback: string) {

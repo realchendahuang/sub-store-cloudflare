@@ -13,11 +13,11 @@ Chinese is the primary documentation language for this repository. See [README.m
 - Previews original and processed node lists in the admin UI, with local node validation.
 - Supports subscription usage info, config backup/restore, and request options such as User-Agent, pass-through User-Agent, timeout, and remote fetch concurrency.
 - Supports temporary `url`, `content`, and `ua` download parameters for one-off conversion through an existing source or collection profile.
-- Outputs Mihomo, sing-box, v2ray, URI, and JSON.
+- Outputs Mihomo, Stash, Surge, Surge Mac, Surfboard, Loon, Egern, Shadowrocket, Quantumult X, sing-box, v2ray, URI, and JSON.
 - Uses Worker Secrets for admin and download tokens.
 
 The deployment model is intentionally small: Workers Static Assets + Worker API + D1 + Worker Secrets.
-It keeps the core Sub-Store workflow: format conversion, subscription formatting, multi-source collections, routing templates, preview/validation, usage info, and backup/restore.
+It keeps the core Sub-Store workflow: format conversion, subscription formatting, multi-source collections, common client outputs, routing templates, preview/validation, usage info, and backup/restore.
 
 ## Architecture
 
@@ -91,6 +91,10 @@ Download URLs:
 ```text
 https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/mihomo?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/surge?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/loon?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/qx?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/sing-box?token=<download-token>
 ```
 
 One-off conversion:
@@ -102,7 +106,9 @@ https://substore.example.com/download/source/<source-id>/sing-box?token=<downloa
 
 `url` temporarily replaces the remote subscription URL, `content` is parsed as local node text, and `ua` temporarily overrides the User-Agent for fetching a remote subscription. These parameters affect only the current request. When a source enables pass-through User-Agent, the Worker forwards the subscription client's User-Agent while fetching the remote subscription.
 
-Custom routing templates apply to Mihomo output. You can import regular Mihomo YAML using keys such as `mixed-port`, `proxy-groups`, and `rule-providers`, or use the internal camelCase JSON keys such as `mixedPort`, `proxyGroups`, and `ruleProviders`.
+Custom routing templates apply to Mihomo, Stash, and Surge Mac YAML output. You can import regular Mihomo YAML using keys such as `mixed-port`, `proxy-groups`, and `rule-providers`, or use the internal camelCase JSON keys such as `mixedPort`, `proxyGroups`, and `ruleProviders`.
+
+Local node content accepts URI lines, Mihomo YAML, JSON proxy arrays, complete Base64 content, and common Surge/Loon/Quantumult X single-line node formats.
 
 ## Acknowledgements
 

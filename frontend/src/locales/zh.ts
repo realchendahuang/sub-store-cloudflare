@@ -416,7 +416,7 @@ export default {
           },
           tips: {
             title: '本地订阅节点',
-            content: '填入订阅内容:\n\n1. 换行输入多个单行代理协议、Mihomo YAML 或 JSON\n\n2. 完整 Base64/YAML\n\n支持常见协议: ss、ssr、vmess、vless、trojan、hysteria、hysteria2、tuic、anytls、http、socks5、wireguard',
+            content: '填入订阅内容:\n\n1. 换行输入多个单行代理协议、Mihomo YAML 或 JSON\n\n2. 完整 Base64/YAML\n\n3. 常见 Surge、Loon、Quantumult X 单行节点\n\n支持常见协议: ss、ssr、vmess、vless、trojan、hysteria、hysteria2、tuic、anytls、http、socks5、wireguard',
           },
         },
         icon: {

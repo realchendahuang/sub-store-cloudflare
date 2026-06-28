@@ -123,6 +123,9 @@ https://substore.example.com/?token=<admin-token>
 ```text
 https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/mihomo?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/surge?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/loon?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/qx?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/sing-box?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/uri?token=<download-token>
 ```

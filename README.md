@@ -19,10 +19,10 @@ English: [README.en.md](README.en.md)
 - 在网页里预览处理前后的节点列表，并校验本地节点内容。
 - 支持订阅流量信息、配置备份/恢复、远程订阅请求超时、User-Agent、透传 User-Agent 和并发参数。
 - 下载链接支持临时传入 `url`、`content` 和 `ua`，可以复用已有过滤器和模板做一次性格式转换。
-- 输出 Mihomo、sing-box、v2ray、URI 和 JSON。
+- 输出 Mihomo、Stash、Surge、Surge Mac、Surfboard、Loon、Egern、Shadowrocket、Quantumult X、sing-box、v2ray、URI 和 JSON。
 - 使用 Worker Secrets 保护管理端和下载链接。
 
-这个项目聚焦“云端聚合 + 云端节点处理 + 云端规则模板 + 最终订阅输出”。它保留日常维护订阅需要的核心链路：格式转换、订阅格式化、多订阅合并、规则模板、预览校验、流量信息和导入导出。不包含 Gist 同步、文件管理、分享、归档、脚本运行、日志面板、队列任务等额外系统。
+这个项目聚焦“云端聚合 + 云端节点处理 + 云端规则模板 + 最终订阅输出”。它保留日常维护订阅需要的核心链路：格式转换、订阅格式化、多订阅合并、常见客户端输出、规则模板、预览校验、流量信息和导入导出。不包含 Gist 同步、文件管理、分享、归档、脚本运行、日志面板、队列任务等额外系统。
 
 ## 致谢
 
@@ -151,6 +151,10 @@ https://substore.example.com/?token=<admin-token>
 ```text
 https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/mihomo?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/surge?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/loon?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/qx?token=<download-token>
+https://substore.example.com/download/collection/<collection-id>/sing-box?token=<download-token>
 ```
 
 临时转换：
@@ -180,10 +184,19 @@ Worker API 保存的过滤器是这版自己的小型 JSON DSL，不暴露前端
 输入格式：
 
 - 远程订阅：每行一个 `http(s)` URL，多个 URL 会合并。
-- 本地节点：支持单行 URI、Mihomo YAML、JSON 代理数组，也支持完整 Base64 内容。
+- 本地节点：支持单行 URI、Mihomo YAML、JSON 代理数组、常见 Surge/Loon/Quantumult X 单行节点，也支持完整 Base64 内容。
 - 常用 URI：`ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
 - 临时输入：下载链接可附加 `url`、`content`、`ua`，用于复用当前订阅源或组合订阅的过滤器、规则模板和输出格式。
 - 流量信息：优先读取订阅响应头 `subscription-userinfo`，也可以手动填写 `upload=...; download=...; total=...`，或通过 `flowUrl` 指定独立查询地址。
+
+输出格式：
+
+- Mihomo / Stash / Surge Mac：YAML 输出，支持模板里的代理组、规则提供者和规则列表。
+- Surge / Surfboard / Loon / Quantumult X：常见文本节点格式输出。
+- Shadowrocket / URI：通用 URI 列表。
+- sing-box：基础 JSON 配置。
+- v2ray：Base64 URI 列表。
+- JSON：处理后的节点数组，适合调试和二次处理。
 
 过滤器示例：
 
@@ -199,7 +212,7 @@ Worker API 保存的过滤器是这版自己的小型 JSON DSL，不暴露前端
 ]
 ```
 
-规则模板只应用于 Mihomo 输出。自定义模板可以导入常见 Mihomo YAML，也可以使用 JSON；导入时会识别 `mixed-port`、`allow-lan`、`log-level`、`proxy-groups`、`rule-providers` 这些 Mihomo 键名，并转换为内部配置。
+规则模板只应用于 Mihomo、Stash 和 Surge Mac 这类 YAML 输出。自定义模板可以导入常见 Mihomo YAML，也可以使用 JSON；导入时会识别 `mixed-port`、`allow-lan`、`log-level`、`proxy-groups`、`rule-providers` 这些 Mihomo 键名，并转换为内部配置。
 
 模板中的 `proxyGroups[].proxies` 或 `proxy-groups[].proxies` 可以写 `$all`，生成订阅时会展开为当前组合里的全部节点。
 

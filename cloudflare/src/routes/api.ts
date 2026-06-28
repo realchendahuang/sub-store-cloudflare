@@ -23,7 +23,7 @@ import {
   upsertSource,
   upsertTemplate,
 } from "../lib/store";
-import { normalizeTarget, previewSourceContent, previewSubscription } from "../lib/subscription";
+import { normalizeTargetAlias, previewSourceContent, previewSubscription } from "../lib/subscription";
 import type {
   CollectionRecord,
   FilterRule,
@@ -41,15 +41,6 @@ type JsonMap = Record<string, unknown>;
 type ApiContext = Context<{ Bindings: SubStoreEnv }>;
 
 const FRONTEND_VERSION = "2.17.35";
-const TARGET_ALIASES: Record<string, SubscriptionTarget> = {
-  mihomo: "mihomo",
-  v2ray: "v2ray",
-  uri: "uri",
-  json: "json",
-  singbox: "sing-box",
-  "sing-box": "sing-box",
-};
-
 apiRoutes.use("*", async (c, next) => {
   const invalid = await requireAdmin(c);
   if (invalid) return invalid;
@@ -406,11 +397,11 @@ function getPublicBaseUrl(c: ApiContext) {
 
 function normalizeDownloadTarget(input: unknown): SubscriptionTarget | undefined {
   if (input === undefined || input === null || String(input) === "") return "mihomo";
-  return TARGET_ALIASES[String(input).toLowerCase()];
+  return normalizeTargetAlias(input);
 }
 
 function normalizeTargetValue(input: unknown): SubscriptionTarget {
-  return "mihomo";
+  return normalizeTargetAlias(input) || "mihomo";
 }
 
 async function stringListBody(c: ApiContext) {

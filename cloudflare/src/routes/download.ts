@@ -1,22 +1,13 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { failed, isTokenValid } from "../lib/http";
-import { buildSubscription, getTargetContentType, normalizeTarget } from "../lib/subscription";
+import { buildSubscription, getTargetContentType, normalizeTarget, normalizeTargetAlias } from "../lib/subscription";
 import { ensureSchema, getRoutingTemplate, getSettings, getSource, getSubscriptionCollection, getSubscriptionSources } from "../lib/store";
 import type { SubscriptionCollection, SubscriptionSource, SubStoreEnv, SubscriptionTarget } from "../types";
 
 export const downloadRoutes = new Hono<{ Bindings: SubStoreEnv }>();
 
 type DownloadContext = Context<{ Bindings: SubStoreEnv }>;
-
-const TARGET_ALIASES: Record<string, SubscriptionTarget> = {
-  mihomo: "mihomo",
-  v2ray: "v2ray",
-  uri: "uri",
-  json: "json",
-  singbox: "sing-box",
-  "sing-box": "sing-box",
-};
 
 downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
   const invalidToken = await rejectInvalidDownloadToken(c);
@@ -144,6 +135,6 @@ async function rejectInvalidDownloadToken(c: DownloadContext) {
 
 function getDownloadTarget(c: DownloadContext, defaultTarget?: string) {
   const explicit = c.req.param("target") || c.req.query("target");
-  if (explicit) return TARGET_ALIASES[String(explicit).toLowerCase()];
+  if (explicit) return normalizeTargetAlias(explicit);
   return normalizeTarget(defaultTarget || "mihomo", c.req.header("user-agent") || "");
 }

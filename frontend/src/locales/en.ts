@@ -427,7 +427,7 @@ export default {
           tips: {
             title: "The content of the subscription",
             content:
-              "Subscription content:\n\n1. Multiple single-line proxy protocols, Mihomo YAML, or JSON\n\n2. Complete Base64/YAML\n\nCommon protocols are supported: ss, ssr, vmess, vless, trojan, hysteria, hysteria2, tuic, anytls, http, socks5, wireguard",
+              "Subscription content:\n\n1. Multiple single-line proxy protocols, Mihomo YAML, or JSON\n\n2. Complete Base64/YAML\n\n3. Common Surge, Loon, and Quantumult X single-line nodes\n\nCommon protocols are supported: ss, ssr, vmess, vless, trojan, hysteria, hysteria2, tuic, anytls, http, socks5, wireguard",
           },
         },
         icon: {

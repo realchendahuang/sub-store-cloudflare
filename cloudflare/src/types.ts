@@ -101,7 +101,20 @@ export type TemplateProxyGroup = {
   [key: string]: unknown;
 };
 
-export type SubscriptionTarget = "mihomo" | "sing-box" | "v2ray" | "uri" | "json";
+export type SubscriptionTarget =
+  | "mihomo"
+  | "stash"
+  | "surge"
+  | "surge-mac"
+  | "surfboard"
+  | "loon"
+  | "egern"
+  | "shadowrocket"
+  | "qx"
+  | "sing-box"
+  | "v2ray"
+  | "uri"
+  | "json";
 
 export type SourceRecord = {
   id: string;

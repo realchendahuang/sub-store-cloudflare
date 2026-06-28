@@ -1,4 +1,5 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+export { normalizeTarget, normalizeTargetAlias } from "./targets";
 import type {
   AppSettings,
   FilterRule,
@@ -35,22 +36,9 @@ type BuildOptions = {
 
 const TEST_URL = "https://www.gstatic.com/generate_204";
 
-export function normalizeTarget(input: string | undefined, userAgent = ""): SubscriptionTarget {
-  const value = String(input || "").toLowerCase();
-  const ua = userAgent.toLowerCase();
-
-  if (["sing-box", "singbox", "sfa", "karing"].includes(value) || ua.includes("sing-box") || ua.includes("singbox")) {
-    return "sing-box";
-  }
-  if (["v2ray", "v2rayn", "v2rayng", "base64"].includes(value) || ua.includes("v2ray")) return "v2ray";
-  if (["uri", "uris", "plain", "text"].includes(value)) return "uri";
-  if (["json", "raw"].includes(value)) return "json";
-  return "mihomo";
-}
-
 export function getTargetContentType(target: SubscriptionTarget) {
   if (target === "sing-box" || target === "json") return "application/json; charset=utf-8";
-  if (target === "v2ray" || target === "uri") return "text/plain; charset=utf-8";
+  if (target === "v2ray" || target === "uri" || target === "surge" || target === "surfboard" || target === "loon" || target === "shadowrocket" || target === "qx") return "text/plain; charset=utf-8";
   return "text/yaml; charset=utf-8";
 }
 
@@ -58,6 +46,13 @@ export async function buildSubscription(options: BuildOptions) {
   const proxies = await loadProxyNodes(options);
   if (proxies.length === 0) throw new Error("No available nodes found");
 
+  if (options.target === "mihomo" || options.target === "stash" || options.target === "surge-mac") return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
+  if (options.target === "surge") return renderSurgeProxies(proxies);
+  if (options.target === "surfboard") return renderSurfboardProxies(proxies);
+  if (options.target === "loon") return renderLoonProxies(proxies);
+  if (options.target === "egern") return renderEgernYaml(proxies);
+  if (options.target === "shadowrocket") return renderProxyUris(proxies);
+  if (options.target === "qx") return renderQxProxies(proxies);
   if (options.target === "sing-box") return renderSingBoxJson(proxies);
   if (options.target === "v2ray") return base64Utf8(renderProxyUris(proxies));
   if (options.target === "uri") return renderProxyUris(proxies);
@@ -251,7 +246,13 @@ function decodeMaybeBase64(raw: string) {
 }
 
 function looksLikeStructuredSubscription(text: string) {
-  return /^[a-z][a-z0-9+.-]*:\/\//im.test(text) || /^\s*(proxies|proxy-groups|rules)\s*:/m.test(text) || /^\s*[\[{]/.test(text);
+  return (
+    /^[a-z][a-z0-9+.-]*:\/\//im.test(text)
+    || /^\s*(proxies|proxy-groups|rules)\s*:/m.test(text)
+    || /^\s*[\[{]/.test(text)
+    || /^\s*(shadowsocks|vmess|vless|trojan|http|socks5|anytls)\s*=/im.test(text)
+    || /^\s*[^=\n]{1,80}\s*=\s*(ss|shadowsocks|ssr|vmess|vless|trojan|http|https|socks5|socks5-tls|hysteria2|hysteria|anytls|tuic|tuic-v5)\s*,/im.test(text)
+  );
 }
 
 function parseProxies(raw: string): ProxyNode[] {
@@ -259,7 +260,7 @@ function parseProxies(raw: string): ProxyNode[] {
   if (!text) return [];
   if (/^\s*[\[{]/.test(text)) return parseJsonProxies(text);
   if (/^\s*proxies\s*:/m.test(text)) return parseYamlProxies(text);
-  return parseProxyUris(text);
+  return parseProxyLines(text);
 }
 
 function addPreviewIds(proxies: ProxyNode[]) {
@@ -293,13 +294,380 @@ function parseYamlProxies(raw: string) {
   }
 }
 
-function parseProxyUris(raw: string) {
+function parseProxyLines(raw: string) {
   return raw
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => parseProxyUri(line, index))
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith(";") && !/^\[[^\]]+\]$/.test(line))
+    .map((line, index) => parseProxyUri(line, index) || parseClientProxyLine(line, index))
     .filter(isProxyNode);
+}
+
+function parseClientProxyLine(line: string, index: number): ProxyNode | undefined {
+  try {
+    if (/^\s*(shadowsocks|vmess|vless|trojan|http|socks5|anytls)\s*=/i.test(line)) return parseQxProxyLine(line, index);
+    if (/^\s*[^=\n]{1,120}\s*=/.test(line)) return parseNamedClientProxyLine(line, index);
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseQxProxyLine(line: string, index: number): ProxyNode | undefined {
+  const equalIndex = line.indexOf("=");
+  if (equalIndex <= 0) return undefined;
+  const kind = line.slice(0, equalIndex).trim().toLowerCase();
+  const parts = splitClientCsv(line.slice(equalIndex + 1));
+  const [server, rawPort] = splitHostPort(parts[0]);
+  const options = parseClientOptions(parts.slice(1));
+  const name = clientOption(options, "tag") || `${kind}-${index + 1}`;
+  const port = Number(rawPort || clientOption(options, "port") || (kind === "http" || kind === "socks5" ? 80 : 443));
+  const tls = qxTlsEnabled(options);
+  const common = clientCommonOptions(options);
+
+  if (kind === "shadowsocks") {
+    return stripUndefined({
+      name,
+      type: "ss",
+      server,
+      port,
+      cipher: clientOption(options, "method"),
+      password: clientOption(options, "password"),
+      plugin: qxPlugin(options),
+      "plugin-opts": qxPluginOptions(options),
+      udp: optionBoolean(clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "vmess" || kind === "vless") {
+    return stripUndefined({
+      name,
+      type: kind,
+      server,
+      port,
+      uuid: clientOption(options, "password") || clientOption(options, "uuid") || clientOption(options, "username"),
+      cipher: kind === "vmess" ? clientOption(options, "method") || "auto" : undefined,
+      alterId: numberOrUndefined(clientOption(options, "alterId") || clientOption(options, "alterid")),
+      encryption: kind === "vless" ? clientOption(options, "encryption") || "none" : undefined,
+      network: qxNetwork(options),
+      tls,
+      servername: clientOption(options, "tls-host") || clientOption(options, "obfs-host"),
+      "ws-opts": qxWsOptions(options),
+      "reality-opts": parseRealityOptions(options),
+      flow: clientOption(options, "flow"),
+      udp: optionBoolean(clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "trojan" || kind === "anytls") {
+    return stripUndefined({
+      name,
+      type: kind,
+      server,
+      port,
+      password: clientOption(options, "password"),
+      sni: clientOption(options, "tls-host") || clientOption(options, "sni") || clientOption(options, "obfs-host"),
+      "reality-opts": parseRealityOptions(options),
+      udp: optionBoolean(clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "http" || kind === "socks5") {
+    return stripUndefined({
+      name,
+      type: kind === "socks5" ? "socks5" : "http",
+      server,
+      port,
+      username: clientOption(options, "username"),
+      password: clientOption(options, "password"),
+      tls,
+      udp: optionBoolean(clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  return undefined;
+}
+
+function parseNamedClientProxyLine(line: string, index: number): ProxyNode | undefined {
+  const equalIndex = line.indexOf("=");
+  const name = line.slice(0, equalIndex).trim() || `proxy-${index + 1}`;
+  const parts = splitClientCsv(line.slice(equalIndex + 1));
+  const rawKind = String(parts[0] || "").trim().toLowerCase();
+  const kind = normalizeClientProxyKind(parts[0]);
+  const server = parts[1];
+  const port = Number(parts[2] || 0);
+  const positional = parts.slice(3);
+  const positionalValues = positional.filter((part) => !part.includes("="));
+  const options = parseClientOptions(positional);
+  const common = clientCommonOptions(options);
+
+  if (!kind || !server || !Number.isFinite(port)) return undefined;
+
+  if (kind === "ss") {
+    return stripUndefined({
+      name,
+      type: "ss",
+      server,
+      port,
+      cipher: clientOption(options, "encrypt-method") || clientOption(options, "method") || positionalValues[0],
+      password: clientOption(options, "password") || positionalValues[1],
+      plugin: clientOption(options, "obfs") || clientOption(options, "obfs-name") ? "obfs" : undefined,
+      "plugin-opts": clientOption(options, "obfs") || clientOption(options, "obfs-name") ? stripUndefined({
+        mode: clientOption(options, "obfs") || clientOption(options, "obfs-name"),
+        host: clientOption(options, "obfs-host"),
+        path: clientOption(options, "obfs-uri"),
+      }) : undefined,
+      udp: optionBoolean(clientOption(options, "udp") || clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "ssr") {
+    return stripUndefined({
+      name,
+      type: "ssr",
+      server,
+      port,
+      cipher: positionalValues[0] || clientOption(options, "encrypt-method") || clientOption(options, "method"),
+      password: positionalValues[1] || clientOption(options, "password"),
+      protocol: clientOption(options, "protocol") || "origin",
+      obfs: clientOption(options, "obfs") || "plain",
+      "protocol-param": clientOption(options, "protocol-param") || clientOption(options, "protoparam"),
+      "obfs-param": clientOption(options, "obfs-param") || clientOption(options, "obfsparam"),
+      udp: optionBoolean(clientOption(options, "udp") || clientOption(options, "udp-relay")),
+      ...common,
+    });
+  }
+
+  if (kind === "vmess" || kind === "vless") {
+    const tls = optionBoolean(clientOption(options, "tls") || clientOption(options, "over-tls")) ?? false;
+    return stripUndefined({
+      name,
+      type: kind,
+      server,
+      port,
+      uuid: clientOption(options, "username") || clientOption(options, "password") || positionalValues[1] || positionalValues[0],
+      cipher: kind === "vmess" ? positionalValues[0] || clientOption(options, "encrypt-method") || clientOption(options, "method") || "auto" : undefined,
+      alterId: numberOrUndefined(clientOption(options, "alterId") || clientOption(options, "alterid")),
+      encryption: kind === "vless" ? clientOption(options, "encryption") || "none" : undefined,
+      network: namedClientNetwork(options),
+      tls,
+      servername: clientOption(options, "sni") || clientOption(options, "tls-name") || clientOption(options, "tls-host"),
+      "ws-opts": namedClientWsOptions(options),
+      "reality-opts": parseRealityOptions(options),
+      flow: clientOption(options, "flow"),
+      udp: optionBoolean(clientOption(options, "udp") || clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "trojan" || kind === "anytls") {
+    return stripUndefined({
+      name,
+      type: kind,
+      server,
+      port,
+      password: clientOption(options, "password") || positionalValues[0],
+      sni: clientOption(options, "sni") || clientOption(options, "tls-name") || clientOption(options, "tls-host"),
+      "reality-opts": parseRealityOptions(options),
+      udp: optionBoolean(clientOption(options, "udp") || clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "http" || kind === "socks5") {
+    return stripUndefined({
+      name,
+      type: kind === "socks5" ? "socks5" : "http",
+      server,
+      port,
+      username: clientOption(options, "username"),
+      password: clientOption(options, "password"),
+      tls: rawKind === "https" || rawKind === "socks5-tls" || optionBoolean(clientOption(options, "tls") || clientOption(options, "over-tls")),
+      udp: optionBoolean(clientOption(options, "udp") || clientOption(options, "udp-relay")),
+      tfo: optionBoolean(clientOption(options, "fast-open")),
+      ...common,
+    });
+  }
+
+  if (kind === "hysteria2") {
+    return stripUndefined({
+      ...common,
+      name,
+      type: "hysteria2",
+      server,
+      port,
+      password: clientOption(options, "password") || positionalValues[0],
+      sni: clientOption(options, "sni") || clientOption(options, "tls-name"),
+      obfs: clientOption(options, "obfs"),
+      "obfs-password": clientOption(options, "obfs-password") || clientOption(options, "gecko-password"),
+      "skip-cert-verify": optionBoolean(clientOption(options, "skip-cert-verify")) ?? common["skip-cert-verify"],
+    });
+  }
+
+  if (kind === "tuic") {
+    return stripUndefined({
+      ...common,
+      name,
+      type: "tuic",
+      server,
+      port,
+      uuid: clientOption(options, "uuid") || positionalValues[0],
+      password: clientOption(options, "password") || positionalValues[1],
+      sni: clientOption(options, "sni"),
+      alpn: commaList(clientOption(options, "alpn") || null),
+      "skip-cert-verify": optionBoolean(clientOption(options, "skip-cert-verify")) ?? common["skip-cert-verify"],
+    });
+  }
+
+  return undefined;
+}
+
+function normalizeClientProxyKind(input: string | undefined) {
+  const value = String(input || "").trim().toLowerCase();
+  if (value === "shadowsocks") return "ss";
+  if (value === "socks5-tls") return "socks5";
+  if (value === "https") return "http";
+  if (value === "hysteria2" || value === "hysteria 2") return "hysteria2";
+  if (value === "tuic-v5") return "tuic";
+  if (["ss", "ssr", "vmess", "vless", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls"].includes(value)) return value;
+  return "";
+}
+
+function splitHostPort(input: string | undefined): [string, string] {
+  const value = String(input || "").trim();
+  const lastColon = value.lastIndexOf(":");
+  if (lastColon <= 0) return [value, ""];
+  return [value.slice(0, lastColon), value.slice(lastColon + 1)];
+}
+
+function splitClientCsv(input: string) {
+  const parts: string[] = [];
+  let current = "";
+  let quote = "";
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (quote) {
+      if (char === quote) quote = "";
+      else current += char;
+    } else if (char === "\"" || char === "'") {
+      quote = char;
+    } else if (char === ",") {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current.trim());
+  return parts.filter((part) => part !== "");
+}
+
+function parseClientOptions(parts: string[]) {
+  const options = new Map<string, string>();
+  for (const part of parts) {
+    const equalIndex = part.indexOf("=");
+    if (equalIndex <= 0) continue;
+    options.set(part.slice(0, equalIndex).trim().toLowerCase(), unquoteClientValue(part.slice(equalIndex + 1).trim()));
+  }
+  return options;
+}
+
+function unquoteClientValue(input: string) {
+  const text = input.trim();
+  const quote = text[0];
+  if ((quote === "\"" || quote === "'") && text[text.length - 1] === quote) return text.slice(1, -1);
+  return text;
+}
+
+function clientOption(options: Map<string, string>, key: string) {
+  return options.get(key.toLowerCase());
+}
+
+function clientCommonOptions(options: Map<string, string>) {
+  return stripUndefined({
+    "skip-cert-verify": optionBoolean(clientOption(options, "skip-cert-verify")) ?? optionBoolean(clientOption(options, "tls-verification"), true),
+    "client-fingerprint": clientOption(options, "client-fingerprint") || clientOption(options, "fingerprint"),
+  });
+}
+
+function optionBoolean(value: unknown, inverted = false): boolean | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const normalized = String(value).trim().toLowerCase();
+  const result = ["1", "true", "yes", "on", "enabled"].includes(normalized)
+    ? true
+    : ["0", "false", "no", "off", "disabled"].includes(normalized)
+      ? false
+      : undefined;
+  return result === undefined ? undefined : inverted ? !result : result;
+}
+
+function qxTlsEnabled(options: Map<string, string>) {
+  const obfs = clientOption(options, "obfs");
+  return ["tls", "wss", "over-tls"].includes(String(obfs || "").toLowerCase())
+    || optionBoolean(clientOption(options, "over-tls")) === true
+    || optionBoolean(clientOption(options, "tls")) === true;
+}
+
+function qxNetwork(options: Map<string, string>) {
+  const obfs = String(clientOption(options, "obfs") || "").toLowerCase();
+  if (obfs === "ws" || obfs === "wss") return "ws";
+  return "tcp";
+}
+
+function qxWsOptions(options: Map<string, string>) {
+  const network = qxNetwork(options);
+  if (network !== "ws") return undefined;
+  return stripUndefined({
+    path: clientOption(options, "obfs-uri") || "/",
+    headers: stripUndefined({ Host: clientOption(options, "obfs-host") }),
+  });
+}
+
+function qxPlugin(options: Map<string, string>) {
+  const obfs = String(clientOption(options, "obfs") || "").toLowerCase();
+  return ["http", "shadowsocks-http"].includes(obfs) ? "obfs" : undefined;
+}
+
+function qxPluginOptions(options: Map<string, string>) {
+  if (!qxPlugin(options)) return undefined;
+  return stripUndefined({
+    mode: "http",
+    host: clientOption(options, "obfs-host"),
+    path: clientOption(options, "obfs-uri"),
+  });
+}
+
+function namedClientNetwork(options: Map<string, string>) {
+  if (optionBoolean(clientOption(options, "ws")) === true) return "ws";
+  const transport = clientOption(options, "transport") || clientOption(options, "network");
+  if (transport) return transport;
+  return "tcp";
+}
+
+function namedClientWsOptions(options: Map<string, string>) {
+  if (namedClientNetwork(options) !== "ws") return undefined;
+  return stripUndefined({
+    path: clientOption(options, "ws-path") || clientOption(options, "path") || "/",
+    headers: stripUndefined({ Host: clientOption(options, "ws-headers")?.replace(/^Host:/i, "") || clientOption(options, "ws-host") || clientOption(options, "host") }),
+  });
+}
+
+function parseRealityOptions(options: Map<string, string>) {
+  const publicKey = clientOption(options, "reality-base64-pubkey") || clientOption(options, "public-key");
+  const shortId = clientOption(options, "reality-hex-shortid") || clientOption(options, "short-id");
+  return publicKey ? stripUndefined({ "public-key": publicKey, "short-id": shortId }) : undefined;
 }
 
 function parseProxyUri(line: string, index: number): ProxyNode | undefined {
@@ -996,6 +1364,316 @@ function expandGroupProxies(group: TemplateProxyGroup, nodeNames: string[]) {
 function findNamesByRegex(names: string[], pattern: string) {
   const regex = compileRegex(pattern);
   return names.filter((name) => regex.test(name));
+}
+
+function renderSurgeProxies(proxies: ProxyNode[]) {
+  return renderTextProxyList(proxies, "surge", toSurgeProxyLine);
+}
+
+function renderSurfboardProxies(proxies: ProxyNode[]) {
+  return renderTextProxyList(proxies, "surfboard", toSurgeProxyLine);
+}
+
+function renderLoonProxies(proxies: ProxyNode[]) {
+  return renderTextProxyList(proxies, "loon", toLoonProxyLine);
+}
+
+function renderQxProxies(proxies: ProxyNode[]) {
+  return renderTextProxyList(proxies, "qx", toQxProxyLine);
+}
+
+function renderTextProxyList(proxies: ProxyNode[], target: string, producer: (proxy: ProxyNode) => string | undefined) {
+  const lines = proxies.map(producer).filter((line): line is string => Boolean(line));
+  if (lines.length === 0) throw new Error(`No supported nodes for ${target} output`);
+  return lines.join("\n");
+}
+
+function renderEgernYaml(proxies: ProxyNode[]) {
+  const list = proxies.map(toEgernProxy).filter((proxy) => Boolean(proxy));
+  if (list.length === 0) throw new Error("No supported nodes for egern output");
+  return stringifyYaml({ proxies: list });
+}
+
+function toSurgeProxyLine(proxy: ProxyNode) {
+  const name = sanitizeTextProxyName(proxy.name);
+  const base = `${name}=${surgeType(proxy)},${proxy.server},${proxy.port}`;
+  const entries = commonTextOptions(proxy);
+
+  if (proxy.type === "ss") {
+    entries.unshift(["encrypt-method", proxy.cipher || "none"], ["password", proxy.password]);
+    appendPluginOptions(entries, proxy, "surge");
+    return joinTextProxy(base, entries);
+  }
+  if (proxy.type === "vmess") {
+    entries.unshift(["username", proxy.uuid], ["encrypt-method", proxy.cipher || "auto"], ["tls", proxy.tls], ["sni", proxy.servername]);
+    appendWsOptions(entries, proxy, "surge");
+    return joinTextProxy(base, entries);
+  }
+  if (proxy.type === "trojan") {
+    entries.unshift(["password", proxy.password], ["sni", proxy.sni || proxy.servername]);
+    return joinTextProxy(base, entries);
+  }
+  if (proxy.type === "http" || proxy.type === "socks5") {
+    entries.unshift(["username", proxy.username], ["password", proxy.password], ["tls", proxy.tls], ["sni", proxy.sni || proxy.servername]);
+    return joinTextProxy(base, entries);
+  }
+  if (proxy.type === "hysteria2") {
+    entries.unshift(["password", proxy.password], ["sni", proxy.sni]);
+    if (proxy.obfs) entries.push(["obfs", proxy.obfs], ["obfs-password", proxy["obfs-password"]]);
+    return joinTextProxy(base, entries);
+  }
+  if (proxy.type === "tuic") {
+    entries.unshift(["uuid", proxy.uuid], ["password", proxy.password], ["sni", proxy.sni]);
+    return joinTextProxy(`${name}=tuic-v5,${proxy.server},${proxy.port}`, entries);
+  }
+  if (proxy.type === "anytls") {
+    entries.unshift(["password", proxy.password], ["sni", proxy.sni || proxy.servername]);
+    return joinTextProxy(base, entries);
+  }
+  return undefined;
+}
+
+function surgeType(proxy: ProxyNode) {
+  if (proxy.type === "socks5") return proxy.tls ? "socks5-tls" : "socks5";
+  if (proxy.type === "http") return proxy.tls ? "https" : "http";
+  return proxy.type;
+}
+
+function toLoonProxyLine(proxy: ProxyNode) {
+  const name = sanitizeTextProxyName(proxy.name);
+  const entries = commonTextOptions(proxy);
+
+  if (proxy.type === "ss") {
+    appendPluginOptions(entries, proxy, "loon");
+    return joinTextProxy(`${name}=shadowsocks,${proxy.server},${proxy.port},${proxy.cipher || "none"},${quoteTextValue(proxy.password)}`, entries);
+  }
+  if (proxy.type === "ssr") {
+    return joinTextProxy(
+      `${name}=shadowsocksr,${proxy.server},${proxy.port},${proxy.cipher || "aes-256-cfb"},${quoteTextValue(proxy.password)},${proxy.protocol || "origin"},${proxy.obfs || "plain"}`,
+      entries,
+    );
+  }
+  if (proxy.type === "vmess" || proxy.type === "vless") {
+    entries.unshift(["transport", proxy.network || "tcp"], ["over-tls", proxy.tls], ["sni", proxy.servername], ["flow", proxy.flow]);
+    appendWsOptions(entries, proxy, "loon");
+    appendRealityOptions(entries, proxy);
+    const method = proxy.type === "vmess" ? proxy.cipher || "auto" : "none";
+    return joinTextProxy(`${name}=${proxy.type},${proxy.server},${proxy.port},${method},${quoteTextValue(proxy.uuid)}`, entries);
+  }
+  if (proxy.type === "trojan" || proxy.type === "anytls") {
+    entries.unshift(["sni", proxy.sni || proxy.servername]);
+    appendRealityOptions(entries, proxy);
+    return joinTextProxy(`${name}=${proxy.type},${proxy.server},${proxy.port},${quoteTextValue(proxy.password)}`, entries);
+  }
+  if (proxy.type === "http" || proxy.type === "socks5") {
+    entries.unshift(["username", proxy.username], ["password", proxy.password], ["over-tls", proxy.tls], ["sni", proxy.sni || proxy.servername]);
+    return joinTextProxy(`${name}=${proxy.type === "socks5" ? "socks5" : "http"},${proxy.server},${proxy.port}`, entries);
+  }
+  if (proxy.type === "hysteria2") {
+    entries.unshift(["tls-name", proxy.sni], ["obfs", proxy.obfs], ["obfs-password", proxy["obfs-password"]]);
+    return joinTextProxy(`${name}=Hysteria2,${proxy.server},${proxy.port},${quoteTextValue(proxy.password)}`, entries);
+  }
+  return undefined;
+}
+
+function toQxProxyLine(proxy: ProxyNode) {
+  const entries = commonTextOptions(proxy);
+  entries.push(["tag", sanitizeQxTag(proxy.name)]);
+
+  if (proxy.type === "ss") {
+    entries.unshift(["method", proxy.cipher || "none"], ["password", proxy.password]);
+    appendQxObfs(entries, proxy);
+    return joinTextProxy(`shadowsocks=${proxy.server}:${proxy.port}`, entries);
+  }
+  if (proxy.type === "ssr") {
+    entries.unshift(["method", proxy.cipher || "aes-256-cfb"], ["password", proxy.password], ["ssr-protocol", proxy.protocol || "origin"], ["obfs", proxy.obfs || "plain"]);
+    return joinTextProxy(`shadowsocks=${proxy.server}:${proxy.port}`, entries);
+  }
+  if (proxy.type === "vmess" || proxy.type === "vless") {
+    entries.unshift(["method", proxy.type === "vmess" ? proxy.cipher || "auto" : "none"], ["password", proxy.uuid], ["over-tls", proxy.tls], ["tls-host", proxy.servername], ["flow", proxy.flow]);
+    appendQxTransport(entries, proxy);
+    appendQxRealityOptions(entries, proxy);
+    return joinTextProxy(`${proxy.type}=${proxy.server}:${proxy.port}`, entries);
+  }
+  if (proxy.type === "trojan" || proxy.type === "anytls") {
+    entries.unshift(["password", proxy.password], ["over-tls", true], ["tls-host", proxy.sni || proxy.servername]);
+    appendQxRealityOptions(entries, proxy);
+    return joinTextProxy(`${proxy.type}=${proxy.server}:${proxy.port}`, entries);
+  }
+  if (proxy.type === "http" || proxy.type === "socks5") {
+    entries.unshift(["username", proxy.username], ["password", proxy.password], ["over-tls", proxy.tls]);
+    return joinTextProxy(`${proxy.type === "socks5" ? "socks5" : "http"}=${proxy.server}:${proxy.port}`, entries);
+  }
+  return undefined;
+}
+
+function toEgernProxy(proxy: ProxyNode) {
+  const common = stripUndefined({
+    name: proxy.name,
+    server: proxy.server,
+    port: proxy.port,
+    tfo: proxy.tfo,
+    udp_relay: proxy.udp,
+  });
+
+  if (proxy.type === "ss") {
+    return stripUndefined({ ...common, type: "shadowsocks", method: proxy.cipher, password: proxy.password });
+  }
+  if (proxy.type === "vmess" || proxy.type === "vless") {
+    return stripUndefined({
+      ...common,
+      type: proxy.type,
+      uuid: proxy.uuid,
+      alter_id: proxy.alterId,
+      security: proxy.type === "vmess" ? proxy.cipher || "auto" : undefined,
+      flow: proxy.flow,
+      tls: proxy.tls,
+      sni: proxy.servername,
+      network: proxy.network,
+      ws_opts: egernWsOptions(proxy),
+      reality: egernRealityOptions(proxy),
+    });
+  }
+  if (proxy.type === "trojan" || proxy.type === "anytls" || proxy.type === "hysteria2") {
+    return stripUndefined({
+      ...common,
+      type: proxy.type,
+      password: proxy.password,
+      sni: proxy.sni || proxy.servername,
+      skip_tls_verify: proxy["skip-cert-verify"],
+      obfs: proxy.obfs,
+      obfs_password: proxy["obfs-password"],
+      reality: egernRealityOptions(proxy),
+    });
+  }
+  if (proxy.type === "http" || proxy.type === "socks5") {
+    return stripUndefined({
+      ...common,
+      type: proxy.type === "http" && proxy.tls ? "https" : proxy.tls ? "socks5_tls" : proxy.type,
+      username: proxy.username,
+      password: proxy.password,
+      skip_tls_verify: proxy["skip-cert-verify"],
+    });
+  }
+  if (proxy.type === "tuic") {
+    return stripUndefined({
+      ...common,
+      type: "tuic",
+      uuid: proxy.uuid,
+      password: proxy.password,
+      sni: proxy.sni,
+      skip_tls_verify: proxy["skip-cert-verify"],
+    });
+  }
+  if (proxy.type === "wireguard") {
+    return stripUndefined({
+      ...common,
+      type: "wireguard",
+      private_key: proxy["private-key"],
+      public_key: proxy["public-key"],
+      pre_shared_key: proxy["pre-shared-key"],
+      address: proxy.ip,
+      ipv6_address: proxy.ipv6,
+    });
+  }
+  return undefined;
+}
+
+function egernWsOptions(proxy: ProxyNode) {
+  const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown> } | undefined;
+  if (proxy.network !== "ws") return undefined;
+  return stripUndefined({ path: wsOpts?.path || "/", headers: wsOpts?.headers });
+}
+
+function egernRealityOptions(proxy: ProxyNode) {
+  const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
+  return realityOpts?.["public-key"] ? stripUndefined({ public_key: realityOpts["public-key"], short_id: realityOpts["short-id"] }) : undefined;
+}
+
+function commonTextOptions(proxy: ProxyNode): Array<[string, unknown]> {
+  return [
+    ["skip-cert-verify", proxy["skip-cert-verify"]],
+    ["udp-relay", proxy.udp],
+    ["fast-open", proxy.tfo || proxy["fast-open"]],
+    ["alpn", formatAlpn(proxy.alpn)],
+  ];
+}
+
+function appendWsOptions(entries: Array<[string, unknown]>, proxy: ProxyNode, target: "surge" | "loon") {
+  const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown> } | undefined;
+  if (proxy.network !== "ws") return;
+  if (target === "surge") {
+    entries.push(["ws", true], ["ws-path", wsOpts?.path || "/"], ["ws-headers", wsHeaderHost(wsOpts)]);
+  } else {
+    entries.push(["path", wsOpts?.path || "/"], ["host", wsHeaderHost(wsOpts)]);
+  }
+}
+
+function appendPluginOptions(entries: Array<[string, unknown]>, proxy: ProxyNode, target: "surge" | "loon") {
+  const pluginOpts = proxy["plugin-opts"] as Record<string, unknown> | undefined;
+  if (proxy.plugin !== "obfs" || !pluginOpts) return;
+  if (target === "surge") {
+    entries.push(["obfs", pluginOpts.mode], ["obfs-host", pluginOpts.host], ["obfs-uri", pluginOpts.path]);
+  } else {
+    entries.push(["obfs-name", pluginOpts.mode], ["obfs-host", pluginOpts.host], ["obfs-uri", pluginOpts.path]);
+  }
+}
+
+function appendRealityOptions(entries: Array<[string, unknown]>, proxy: ProxyNode) {
+  const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
+  entries.push(["public-key", realityOpts?.["public-key"]], ["short-id", realityOpts?.["short-id"]]);
+}
+
+function appendQxRealityOptions(entries: Array<[string, unknown]>, proxy: ProxyNode) {
+  const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
+  entries.push(["reality-base64-pubkey", realityOpts?.["public-key"]], ["reality-hex-shortid", realityOpts?.["short-id"]]);
+}
+
+function appendQxObfs(entries: Array<[string, unknown]>, proxy: ProxyNode) {
+  const pluginOpts = proxy["plugin-opts"] as Record<string, unknown> | undefined;
+  if (proxy.plugin === "obfs" && pluginOpts) entries.push(["obfs", pluginOpts.mode], ["obfs-host", pluginOpts.host], ["obfs-uri", pluginOpts.path]);
+}
+
+function appendQxTransport(entries: Array<[string, unknown]>, proxy: ProxyNode) {
+  if (proxy.network !== "ws") return;
+  const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown> } | undefined;
+  entries.push(["obfs", proxy.tls ? "wss" : "ws"], ["obfs-uri", wsOpts?.path || "/"], ["obfs-host", wsHeaderHost(wsOpts)]);
+}
+
+function joinTextProxy(base: string, entries: Array<[string, unknown]>) {
+  const suffix = entries
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${formatTextOptionValue(value)}`)
+    .join(",");
+  return suffix ? `${base},${suffix}` : base;
+}
+
+function formatTextOptionValue(value: unknown) {
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) return quoteTextValue(value.join(","));
+  const text = String(value);
+  return /[,\s"]/.test(text) ? quoteTextValue(text) : text;
+}
+
+function quoteTextValue(value: unknown) {
+  return `"${String(value || "").replace(/"/g, '\\"')}"`;
+}
+
+function sanitizeTextProxyName(name: string) {
+  return name.replace(/[=,\r\n]/g, " ").trim() || "proxy";
+}
+
+function sanitizeQxTag(name: string) {
+  return name.replace(/[,\r\n]/g, " ").trim() || "proxy";
+}
+
+function wsHeaderHost(wsOpts: { headers?: Record<string, unknown> } | undefined) {
+  return wsOpts?.headers?.Host || wsOpts?.headers?.host;
+}
+
+function formatAlpn(value: unknown) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(",");
+  return stringSetting(value);
 }
 
 function renderSingBoxJson(proxies: ProxyNode[]) {

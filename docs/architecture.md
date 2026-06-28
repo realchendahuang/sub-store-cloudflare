@@ -48,7 +48,7 @@ Cloudflare Worker
   |-- 应用 collection filters
   |-- 确保节点名唯一
   |-- 套用 template
-  |-- 输出 mihomo / sing-box / v2ray / uri / json
+  |-- 输出 mihomo / stash / surge / loon / qx / shadowrocket / sing-box / v2ray / uri / json
 ```
 
 `/download/source/:id/:target` 走同一套解析和过滤逻辑，只是不读取 collection。
@@ -65,7 +65,7 @@ Cloudflare Worker
 
 ## 输入与核心能力
 
-远程订阅只负责拉取 `http(s)` URL，多个 URL 可以按行填写并合并。本地订阅支持单行 URI、Mihomo YAML、JSON 代理数组和完整 Base64 内容。常用 URI 包括 `ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
+远程订阅只负责拉取 `http(s)` URL，多个 URL 可以按行填写并合并。本地订阅支持单行 URI、Mihomo YAML、JSON 代理数组、常见 Surge/Loon/Quantumult X 单行节点和完整 Base64 内容。常用 URI 包括 `ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
 
 这版保留的核心能力是：
 
@@ -76,7 +76,7 @@ Cloudflare Worker
 - 下载链接级临时输入和一次性格式转换。
 - 单订阅源自定义 User-Agent 和透传 User-Agent。
 - 订阅流量信息、配置备份与恢复。
-- Mihomo、sing-box、v2ray、URI、JSON 输出。
+- Mihomo、Stash、Surge、Surge Mac、Surfboard、Loon、Egern、Shadowrocket、Quantumult X、sing-box、v2ray、URI、JSON 输出。
 
 脚本运行、文件托管、Gist 同步、分享、归档、定时任务和日志系统不在核心路径里。
 
@@ -111,7 +111,7 @@ Cloudflare Worker
 
 ## Templates
 
-模板保存在 D1，只应用于 Mihomo 输出。导入接口接受 JSON 或 YAML；常见 Mihomo YAML 键名会归一化成内部配置。
+模板保存在 D1，只应用于 Mihomo、Stash 和 Surge Mac 这类 YAML 输出。导入接口接受 JSON 或 YAML；常见 Mihomo YAML 键名会归一化成内部配置。
 
 - `mixedPort`
 - `mixed-port`
@@ -128,7 +128,7 @@ Cloudflare Worker
 - `rule-providers`
 - `rules`
 
-`proxyGroups[].proxies` 或 `proxy-groups[].proxies` 里可以使用 `$all`，生成时会展开为当前组合订阅里的全部节点。sing-box、v2ray、URI 和 JSON 输出使用同一套节点解析与过滤结果，但不读取 Mihomo 规则模板。
+`proxyGroups[].proxies` 或 `proxy-groups[].proxies` 里可以使用 `$all`，生成时会展开为当前组合订阅里的全部节点。Surge、Surfboard、Loon、Egern、Shadowrocket、Quantumult X、sing-box、v2ray、URI 和 JSON 输出使用同一套节点解析与过滤结果，但不读取 Mihomo 规则模板。
 
 ## 为什么只用 D1
 
