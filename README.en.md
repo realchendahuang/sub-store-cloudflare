@@ -12,6 +12,7 @@ Chinese is the primary documentation language for this repository. See [README.m
 - Provides built-in Mihomo routing templates and supports custom JSON/YAML templates.
 - Previews original and processed node lists in the admin UI, with local node validation.
 - Supports subscription usage info, config backup/restore, and request options such as User-Agent, timeout, and remote fetch concurrency.
+- Supports temporary `url`, `content`, and `ua` download parameters for one-off conversion through an existing source or collection profile.
 - Outputs Mihomo, sing-box, v2ray, URI, and JSON.
 - Uses Worker Secrets for admin and download tokens.
 
@@ -91,6 +92,15 @@ Download URLs:
 https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>
 https://substore.example.com/download/collection/<collection-id>/mihomo?token=<download-token>
 ```
+
+One-off conversion:
+
+```text
+https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>&url=https%3A%2F%2Fexample.com%2Fsub
+https://substore.example.com/download/source/<source-id>/sing-box?token=<download-token>&content=<url-encoded-node-text>
+```
+
+`url` temporarily replaces the remote subscription URL, `content` is parsed as local node text, and `ua` temporarily overrides the User-Agent for fetching a remote subscription. These parameters affect only the current request.
 
 ## Acknowledgements
 

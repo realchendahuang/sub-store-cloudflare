@@ -18,6 +18,7 @@ English: [README.en.md](README.en.md)
 - 内置常用 Mihomo 分流模板，也支持导入自己的 JSON/YAML 模板。
 - 在网页里预览处理前后的节点列表，并校验本地节点内容。
 - 支持订阅流量信息、配置备份/恢复、远程订阅请求超时、User-Agent 和并发参数。
+- 下载链接支持临时传入 `url`、`content` 和 `ua`，可以复用已有过滤器和模板做一次性格式转换。
 - 输出 Mihomo、sing-box、v2ray、URI 和 JSON。
 - 使用 Worker Secrets 保护管理端和下载链接。
 
@@ -152,6 +153,15 @@ https://substore.example.com/download/source/<source-id>/mihomo?token=<download-
 https://substore.example.com/download/collection/<collection-id>/mihomo?token=<download-token>
 ```
 
+临时转换：
+
+```text
+https://substore.example.com/download/source/<source-id>/mihomo?token=<download-token>&url=https%3A%2F%2Fexample.com%2Fsub
+https://substore.example.com/download/source/<source-id>/sing-box?token=<download-token>&content=<url-encoded-node-text>
+```
+
+`url` 会临时替换该订阅源的远程订阅地址，`content` 会临时按本地节点文本解析，`ua` 会临时覆盖拉取远程订阅时使用的 User-Agent。临时参数只影响本次请求，不会写入 D1。
+
 如果配置了独立下载域名，把它写入 `SUB_STORE_PUBLIC_DOWNLOAD_HOSTS`。该域名只开放 `/download/*`。
 
 完整部署步骤见 [docs/deployment.md](docs/deployment.md)。
@@ -172,6 +182,7 @@ Worker API 保存的过滤器是这版自己的小型 JSON DSL，不暴露前端
 - 远程订阅：每行一个 `http(s)` URL，多个 URL 会合并。
 - 本地节点：支持单行 URI、Mihomo YAML、JSON 代理数组，也支持完整 Base64 内容。
 - 常用 URI：`ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
+- 临时输入：下载链接可附加 `url`、`content`、`ua`，用于复用当前订阅源或组合订阅的过滤器、规则模板和输出格式。
 - 流量信息：优先读取订阅响应头 `subscription-userinfo`，也可以手动填写 `upload=...; download=...; total=...`，或通过 `flowUrl` 指定独立查询地址。
 
 过滤器示例：

@@ -65,13 +65,16 @@ async function renderDownload(
     templateId?: string;
   },
 ) {
+  const sourceOverride = getTemporarySourceOverride(c);
+  const sources = sourceOverride ? applyTemporarySourceOverride(options.sources, sourceOverride, options.collection) : options.sources;
+  const source = sourceOverride && options.source ? applyTemporarySourceOverride([options.source], sourceOverride)[0] : options.source;
   const template = await getRoutingTemplate(c.env, options.templateId);
   const settings = await getSettings(c.env);
   try {
     const body = await buildSubscription({
-      source: options.source,
+      source,
       collection: options.collection,
-      sources: options.sources,
+      sources,
       requestUrl: new URL(c.req.url),
       target: options.target,
       template,
@@ -87,6 +90,46 @@ async function renderDownload(
   } catch (error) {
     return failed(c, error instanceof Error ? error.message : String(error), 500);
   }
+}
+
+type TemporarySourceOverride = {
+  url?: string;
+  content?: string;
+  ua?: string;
+};
+
+function getTemporarySourceOverride(c: DownloadContext): TemporarySourceOverride | undefined {
+  const url = stringQuery(c, "url");
+  const content = stringQuery(c, "content");
+  const ua = stringQuery(c, "ua") || stringQuery(c, "userAgent") || stringQuery(c, "user-agent");
+  if (!url && !content && !ua) return undefined;
+  return { url, content, ua };
+}
+
+function applyTemporarySourceOverride(sources: SubscriptionSource[], override: TemporarySourceOverride, collection?: SubscriptionCollection) {
+  const selectedIds = collection?.sourceIds || [];
+  const overrideIndex = selectedIds.length > 0
+    ? sources.findIndex((source) => selectedIds.includes(source.id) || selectedIds.includes(source.name))
+    : 0;
+  const targetIndex = overrideIndex >= 0 ? overrideIndex : 0;
+
+  return sources.map((source, index) => {
+    if (index !== targetIndex) return source;
+    const meta = { ...(source.meta || {}) };
+    if (override.ua) meta.ua = override.ua;
+    return {
+      ...source,
+      type: override.content ? "local" : override.url ? "remote" : source.type,
+      url: override.url || source.url,
+      content: override.content || (override.url ? "" : source.content),
+      meta,
+    };
+  });
+}
+
+function stringQuery(c: DownloadContext, key: string) {
+  const value = c.req.query(key);
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function getDownloadToken(c: DownloadContext) {

@@ -4,22 +4,6 @@
       <span>{{ desc }}</span>
       <nut-icon name="tips"></nut-icon>
     </div>
-    <div class="preview-options">
-      <div class="preview-option-item">
-        <input type="checkbox" id="includeUnsupportedProxy" name="includeUnsupportedProxy" value="includeUnsupportedProxy" v-model="includeUnsupportedProxy">
-        <label for="includeUnsupportedProxy">{{ includeUnsupportedProxyLabel }}</label>
-      </div>
-      <div class="preview-option-item">
-        <input
-          type="checkbox"
-          id="prettyYaml"
-          name="prettyYaml"
-          value="prettyYaml"
-          v-model="prettyYaml"
-        >
-        <label for="prettyYaml">{{ prettyYamlLabel }}</label>
-      </div>
-    </div>
     <ul class="preview-list">
       <li v-for="platform in platformList" :key="platform.name">
         <div class="infos">
@@ -51,7 +35,6 @@
 </template>
 
 <script lang="ts" setup>
-  import { onMounted, ref, watch } from 'vue';
   import json from '@/assets/icons/json.svg';
   import uri from '@/assets/icons/uri.svg';
   import v2ray from '@/assets/icons/v2ray.png';
@@ -68,11 +51,8 @@
   import { useCloudflareApi } from '@/api/app';
 
   const settingsStore = useSettingsStore();
-  const { changeAppearanceSetting } = settingsStore;
   const { appearanceSetting } = storeToRefs(settingsStore);
 
-  const includeUnsupportedProxy = ref(false);
-  const prettyYaml = ref(false);
   const { copy, isSupported } = useClipboard();
   const { toClipboard: copyFallback } = useV3Clipboard();
   const { showNotify } = useAppNotifyStore();
@@ -83,13 +63,7 @@
     url,
     general,
     notify,
-    tipsTitle,
-    tipsContent,
     desc,
-    tipsCancelText,
-    tipsOkText,
-    includeUnsupportedProxyLabel,
-    prettyYamlLabel,
   } = defineProps<{
     name: string;
     displayName?: string;
@@ -97,54 +71,12 @@
     general: string;
     notify: string;
     desc: string;
-    includeUnsupportedProxyLabel: string;
-    prettyYamlLabel: string;
     url?: string;
-    tipsTitle?: string;
-    tipsContent?: string;
-    tipsCancelText?: string;
-    tipsOkText?: string;
   }>();
 
   const { currentUrl: host } = useHostAPI();
   const cloudflareApi = useCloudflareApi();
 
-  const PREVIEW_INCLUDE_UNSUPPORTED_PROXY_KEY = "preview.includeUnsupportedProxy";
-  const PREVIEW_PRETTY_YAML_KEY = "preview.prettyYaml";
-
-  const getLocalStorageBoolean = (key: string): boolean => {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return false;
-    }
-    try {
-      return window.localStorage.getItem(key) === "true";
-    } catch {
-      return false;
-    }
-  };
-
-  const setLocalStorageBoolean = (key: string, value: boolean) => {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return;
-    }
-    try {
-      window.localStorage.setItem(key, String(value));
-    } catch {
-      // ignore localStorage write failures in restricted environments
-    }
-  };
-
-  onMounted(() => {
-    includeUnsupportedProxy.value = getLocalStorageBoolean(PREVIEW_INCLUDE_UNSUPPORTED_PROXY_KEY);
-    prettyYaml.value = getLocalStorageBoolean(PREVIEW_PRETTY_YAML_KEY);
-  });
-
-  watch(includeUnsupportedProxy, (value) => {
-    setLocalStorageBoolean(PREVIEW_INCLUDE_UNSUPPORTED_PROXY_KEY, value);
-  });
-  watch(prettyYaml, (value) => {
-    setLocalStorageBoolean(PREVIEW_PRETTY_YAML_KEY, value);
-  });
   type PlatformPath = string | null;
 
   const buildUrlWithQuery = (url: string, query: Record<string, string | boolean>): string => {
@@ -168,12 +100,6 @@
     const query = {} as Record<string, string | boolean>;
     if (path !== null) {
       query.target = path;
-    }
-    if (includeUnsupportedProxy.value) {
-      query.includeUnsupportedProxy = true;
-    }
-    if (prettyYaml.value) {
-      query.prettyYaml = true;
     }
     let previewUrl
     if (url) {
@@ -199,15 +125,7 @@
     const realUrl = res?.data?.status === 'success' && res.data.data?.url
       ? res.data.data.url
       : getUrl(path);
-
-    const query = {} as Record<string, string | boolean>;
-    if (includeUnsupportedProxy.value) {
-      query.includeUnsupportedProxy = true;
-    }
-    if (prettyYaml.value) {
-      query.prettyYaml = true;
-    }
-    return buildUrlWithQuery(realUrl, query);
+    return realUrl;
   };
   const targetOpen = async (path: PlatformPath) => {
     const realUrl = await getRealUrl(path);
@@ -267,35 +185,6 @@
 </script>
 
 <style lang="scss" scoped>
-  .preview-options {
-    width: max-content;
-    max-width: 100%;
-    margin: 6px auto 4px;
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    column-gap: 18px;
-    row-gap: 8px;
-    flex-wrap: wrap;
-
-    .preview-option-item {
-      display: flex;
-      align-items: center;
-      font-size: 12px;
-      gap: 4px;
-      white-space: nowrap;
-    }
-
-    input {
-      cursor: pointer;
-      padding: 0;
-      margin: 0;
-    }
-
-    label {
-      cursor: pointer;
-    }
-  }
   .desc {
     display: flex;
     justify-content: center;
