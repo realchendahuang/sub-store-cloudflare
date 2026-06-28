@@ -10,18 +10,7 @@ export const downloadRoutes = new Hono<{ Bindings: SubStoreEnv }>();
 type DownloadContext = Context<{ Bindings: SubStoreEnv }>;
 
 const TARGET_ALIASES: Record<string, SubscriptionTarget> = {
-  clashmeta: "mihomo",
   mihomo: "mihomo",
-  stash: "mihomo",
-  clash: "mihomo",
-  egern: "mihomo",
-  surfboard: "mihomo",
-  surge: "mihomo",
-  surgemac: "mihomo",
-  loon: "mihomo",
-  shadowrocket: "uri",
-  qx: "uri",
-  quantumultx: "uri",
   v2ray: "v2ray",
   uri: "uri",
   json: "json",
@@ -32,6 +21,8 @@ const TARGET_ALIASES: Record<string, SubscriptionTarget> = {
 downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
   const invalidToken = await rejectInvalidDownloadToken(c);
   if (invalidToken) return invalidToken;
+  const target = getDownloadTarget(c);
+  if (!target) return failed(c, "Unsupported target", 400);
 
   await ensureSchema(c.env);
   const collection = await getSubscriptionCollection(c.env, c.req.param("name"));
@@ -40,7 +31,7 @@ downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
   return renderDownload(c, {
     collection,
     sources: await getSubscriptionSources(c.env),
-    target: getDownloadTarget(c, collection.templateId),
+    target,
     templateId: collection.templateId,
   });
 });
@@ -48,6 +39,8 @@ downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
 downloadRoutes.get("/download/source/:name/:target?/:token?", async (c) => {
   const invalidToken = await rejectInvalidDownloadToken(c);
   if (invalidToken) return invalidToken;
+  const target = getDownloadTarget(c);
+  if (!target) return failed(c, "Unsupported target", 400);
 
   await ensureSchema(c.env);
   const source = await getSource(c.env, c.req.param("name"));
@@ -58,7 +51,7 @@ downloadRoutes.get("/download/source/:name/:target?/:token?", async (c) => {
   return renderDownload(c, {
     source: subscriptionSource,
     sources: [subscriptionSource],
-    target: getDownloadTarget(c),
+    target,
   });
 });
 
@@ -105,7 +98,8 @@ async function rejectInvalidDownloadToken(c: DownloadContext) {
   return failed(c, "Download token is invalid", 403);
 }
 
-function getDownloadTarget(c: DownloadContext, defaultTarget = "mihomo") {
-  const input = c.req.param("target") || c.req.query("target") || defaultTarget;
-  return TARGET_ALIASES[String(input || "").toLowerCase()] || normalizeTarget(input, c.req.header("user-agent") || "");
+function getDownloadTarget(c: DownloadContext, defaultTarget?: string) {
+  const explicit = c.req.param("target") || c.req.query("target");
+  if (explicit) return TARGET_ALIASES[String(explicit).toLowerCase()];
+  return normalizeTarget(defaultTarget || "mihomo", c.req.header("user-agent") || "");
 }

@@ -27,8 +27,6 @@
             <img :src="platform.icon" class="auto-reverse" />
           </div>
           <p>{{ platform.name }}</p>
-          <nut-icon name="tips" v-if="platform.path === 'SurgeMac'" @click="tips"></nut-icon>
-          <nut-icon name="tips" v-if="platform.path === 'QX'" @click="qxTips"></nut-icon>
         </div>
 
         <div class="actions">
@@ -54,18 +52,8 @@
 
 <script lang="ts" setup>
   import { onMounted, ref, watch } from 'vue';
-  import { Toast } from '@nutui/nutui';
   import json from '@/assets/icons/json.svg';
   import uri from '@/assets/icons/uri.svg';
-  import surfboard from '@/assets/icons/surfboard.png';
-  import surge from '@/assets/icons/surge.png';
-  import surgeMac from '@/assets/icons/surgeformac_text.png';
-  import clash from '@/assets/icons/clash.png';
-  import egern from '@/assets/icons/egern.png';
-  import quanx from '@/assets/icons/quanx.png';
-  import loon from '@/assets/icons/loon.png';
-  import stash from '@/assets/icons/stash.png';
-  import shadowrocket from '@/assets/icons/shadowrocket.png';
   import v2ray from '@/assets/icons/v2ray.png';
   import singbox from '@/assets/icons/sing-box.png';
   import clashmeta from '@/assets/icons/clashmeta.png';
@@ -248,55 +236,9 @@
       icon: logoIcon,
     },
     {
-      name: 'Stash',
-      path: 'Stash',
-      icon: stash,
-    },
-    {
       name: 'Mihomo',
-      path: 'ClashMeta',
+      path: 'mihomo',
       icon: clashmeta,
-    },
-    // {
-    //   name: 'Clash(Deprecated)',
-    //   path: 'Clash',
-    //   icon: clash,
-    // },
-    {
-      name: 'Egern',
-      path: 'Egern',
-      icon: egern,
-    },
-    {
-      name: 'Surfboard',
-      path: 'Surfboard',
-      icon: surfboard,
-    },
-    {
-      name: 'Surge',
-      path: 'Surge',
-      icon: surge,
-    },
-    {
-      name: 'Surge(macOS)',
-      path: 'SurgeMac',
-      icon: surgeMac,
-    },
-
-    {
-      name: 'Loon',
-      path: 'Loon',
-      icon: loon,
-    },
-    {
-      name: 'Shadowrocket',
-      path: 'ShadowRocket',
-      icon: shadowrocket,
-    },
-    {
-      name: 'Quantumult X',
-      path: 'QX',
-      icon: quanx,
     },
     {
       name: 'sing-box',
@@ -320,27 +262,8 @@
     },
   ];
   const tips = () => {
-    window.open('https://github.com/sub-store-org/Sub-Store/wiki/%E9%93%BE%E6%8E%A5%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E');
-    // Dialog({
-    //   title: tipsTitle,
-    //   content: tipsContent,
-    //   popClass: 'auto-dialog',
-    //   onOk: () => {
-    //     window.open('https://github.com/sub-store-org/Sub-Store/wiki/%E9%93%BE%E6%8E%A5%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E');
-    //   },
-    //   okText: tipsOkText,
-    //   cancelText: tipsCancelText,
-    //   // noCancelBtn: true,
-    //   closeOnPopstate: true,
-    //   lockScroll: false,
-    // });
-
+    window.open('https://github.com/realchendahuang/sub-store-cloudflare#%E9%85%8D%E7%BD%AE%E6%A8%A1%E5%9E%8B');
   };
-  const qxTips = () => {
-    Toast.warn('由于 QX 资源解析器对 QX 格式的输入支持不完善, 请勿对 Sub-Store 链接启用资源解析器. 如果一定要用资源解析器, 请手动选择 V2Ray 输出, 将形如 ?target=V2Ray 的链接填入 QX', {
-      duration: 5000
-    });
-  }
 </script>
 
 <style lang="scss" scoped>

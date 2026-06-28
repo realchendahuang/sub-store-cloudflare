@@ -42,18 +42,7 @@ type ApiContext = Context<{ Bindings: SubStoreEnv }>;
 
 const FRONTEND_VERSION = "2.17.35";
 const TARGET_ALIASES: Record<string, SubscriptionTarget> = {
-  clashmeta: "mihomo",
   mihomo: "mihomo",
-  stash: "mihomo",
-  clash: "mihomo",
-  egern: "mihomo",
-  surfboard: "mihomo",
-  surge: "mihomo",
-  surgemac: "mihomo",
-  loon: "mihomo",
-  shadowrocket: "uri",
-  qx: "uri",
-  quantumultx: "uri",
   v2ray: "v2ray",
   uri: "uri",
   json: "json",
@@ -196,12 +185,16 @@ apiRoutes.post("/preview/collection", async (c) => {
 apiRoutes.get("/link/source/:name", async (c) => {
   const sub = await getSource(c.env, c.req.param("name"));
   if (!sub) return failed(c, "Source not found", 404);
-  return success(c, buildDownloadLink(c, "source", sub.id));
+  const link = buildDownloadLink(c, "source", sub.id);
+  if (!link) return failed(c, "Unsupported target", 400);
+  return success(c, link);
 });
 apiRoutes.get("/link/collection/:name", async (c) => {
   const collection = await getCollection(c.env, c.req.param("name"));
   if (!collection) return failed(c, "Collection not found", 404);
-  return success(c, buildDownloadLink(c, "collection", collection.id));
+  const link = buildDownloadLink(c, "collection", collection.id);
+  if (!link) return failed(c, "Unsupported target", 400);
+  return success(c, link);
 });
 
 apiRoutes.get("/source/flow/:name", async (c) => {
@@ -394,6 +387,7 @@ function toSubscriptionCollection(input: JsonMap): SubscriptionCollection {
 
 function buildDownloadLink(c: ApiContext, kind: "source" | "collection", id: string) {
   const target = normalizeDownloadTarget(c.req.query("target"));
+  if (!target) return undefined;
   const path = kind === "collection" ? `/download/collection/${encodeURIComponent(id)}/${target}` : `/download/source/${encodeURIComponent(id)}/${target}`;
   const url = new URL(path, getPublicBaseUrl(c));
   if (c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN) url.searchParams.set("token", c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN);
@@ -410,8 +404,9 @@ function getPublicBaseUrl(c: ApiContext) {
   return `https://${host}`;
 }
 
-function normalizeDownloadTarget(input: unknown): SubscriptionTarget {
-  return TARGET_ALIASES[String(input || "").toLowerCase()] || normalizeTarget(String(input || "mihomo"));
+function normalizeDownloadTarget(input: unknown): SubscriptionTarget | undefined {
+  if (input === undefined || input === null || String(input) === "") return "mihomo";
+  return TARGET_ALIASES[String(input).toLowerCase()];
 }
 
 function normalizeTargetValue(input: unknown): SubscriptionTarget {
