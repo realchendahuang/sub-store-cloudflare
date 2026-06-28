@@ -21,7 +21,10 @@ Chinese is the primary documentation language for this repository. See [README.m
 - [AI Agent install](docs/ai-agent-install.md)
 - [Product scope](docs/product-scope.md)
 - [Architecture](docs/architecture.md)
+- [Testing and release gates](docs/testing.md)
+- [Release process](docs/release.md)
 - [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
 - [Security](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 

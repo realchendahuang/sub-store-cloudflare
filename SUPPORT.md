@@ -1,6 +1,6 @@
 # Support
 
-Use GitHub Issues for reproducible bugs and focused feature requests.
+Use GitHub Issues for reproducible bugs, deployment problems, and focused feature requests. Use GitHub Discussions for broader questions when available.
 
 Before opening an issue:
 

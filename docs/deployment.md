@@ -265,4 +265,5 @@ pnpm run deploy:dry-run
 - 当前文件发布风险扫描。
 - `main` 历史发布风险扫描。
 - Wrangler dry-run 部署检查。
-- 仓库没有 `.github` 自动化文件；发布检查在本地完成。
+- 仓库没有 GitHub Actions 或 Dependabot 自动化；`.github` 只用于 issue / pull request 模板。
+- 发布检查在本地完成。

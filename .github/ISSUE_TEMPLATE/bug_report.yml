@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible app bug.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include subscription URLs, node URIs, admin tokens, download tokens, private D1 database IDs, or generated seed SQL.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken, and what did you expect instead?
+      placeholder: The app fails to...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Admin UI
+        - Worker API
+        - Download output
+        - Source parsing
+        - Collection filters
+        - Routing templates
+        - Backup / restore
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit SHA.
+      placeholder: v0.1.1
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: output-target
+    attributes:
+      label: Output target
+      description: Fill this when the bug is related to generated subscriptions.
+      placeholder: mihomo, sing-box, surge, uri, json, or not applicable.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or screenshots
+      description: Paste only redacted output. Remove tokens, subscription URLs, node URIs, hostnames you do not want public, and private Cloudflare IDs.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I removed subscription URLs, node URIs, tokens, private D1 IDs, and generated seed SQL.
+          required: true
+        - label: I searched existing issues and docs before opening this issue.
+          required: true

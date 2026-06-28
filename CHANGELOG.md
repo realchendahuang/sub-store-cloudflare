@@ -8,7 +8,8 @@ This project follows semantic versioning where practical.
 
 ### Changed
 
-- Removed repository GitHub Actions, Dependabot, issue templates, and pull request template so the upstream project does not depend on GitHub automation.
+- Removed repository GitHub Actions and Dependabot so the upstream project does not depend on GitHub automation.
+- Kept lightweight GitHub issue forms and a pull request template for contributor intake; they do not run CI/CD.
 - Clarified that the Cloudflare Deploy Button is the Cloudflare-hosted template import path, while `pnpm run install:cloudflare` is the local Agent/CLI deployment path.
 - Updated Worker compatibility dates and documented the Node 22 + pnpm local development baseline.
 

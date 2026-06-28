@@ -1,0 +1,68 @@
+name: Deployment problem
+description: Get help with Cloudflare, Agent / CLI, or Wrangler deployment.
+title: "[Deploy]: "
+labels: ["deployment"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste live subscription URLs, node URIs, admin tokens, download tokens, private D1 database IDs, or generated seed SQL.
+  - type: dropdown
+    id: install-path
+    attributes:
+      label: Install path
+      options:
+        - Deploy to Cloudflare button
+        - pnpm run install:cloudflare
+        - Manual Wrangler deploy
+        - Local development
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit SHA.
+      placeholder: v0.1.1
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the failed command and the exact stage where it failed.
+      placeholder: The deployment fails when...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Paste sanitized versions and platform details.
+      value: |
+        - OS:
+        - Node:
+        - pnpm:
+        - Wrangler:
+        - Cloudflare account login: yes/no
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Run these when possible and paste redacted output.
+      value: |
+        pnpm run install:doctor
+        pnpm run check:release
+        pnpm run deploy:dry-run
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed subscription URLs, node URIs, tokens, private D1 IDs, and generated seed SQL.
+          required: true

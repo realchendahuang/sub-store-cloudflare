@@ -1,0 +1,57 @@
+name: Feature request
+description: Propose a scoped product improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project intentionally stays Cloudflare-native and small: Workers Static Assets + Worker API + D1 + Worker Secrets. Read docs/product-scope.md before proposing larger systems.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What real workflow is hard or missing?
+      placeholder: I need to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Sources
+        - Collections
+        - Filters
+        - Templates
+        - Preview
+        - Backup / restore
+        - Download output
+        - Deployment / Agent install
+        - Documentation
+        - Outside current product scope
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workaround, smaller version, or reason current features are insufficient.
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I checked docs/product-scope.md and explained why this belongs in the project.
+          required: true
+        - label: I did not include subscription URLs, node URIs, tokens, private D1 IDs, or generated seed SQL.
+          required: true

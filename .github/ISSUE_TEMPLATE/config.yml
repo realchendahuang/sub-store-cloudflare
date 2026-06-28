@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Deployment docs
+    url: https://github.com/realchendahuang/sub-store-cloudflare/blob/main/docs/deployment.md
+    about: Read the Cloudflare button, Agent / CLI, and manual Wrangler deployment guide.
+  - name: AI Agent install guide
+    url: https://github.com/realchendahuang/sub-store-cloudflare/blob/main/docs/ai-agent-install.md
+    about: Use Codex, Claude Code, or another local coding agent to install this project.
+  - name: Security report
+    url: https://github.com/realchendahuang/sub-store-cloudflare/blob/main/SECURITY.md
+    about: Do not open public issues for secrets, auth bypasses, or private data exposure.

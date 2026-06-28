@@ -5,6 +5,13 @@ Use this checklist before publishing a release.
 This repository does not use GitHub Actions, Dependabot, or release automation.
 Run the release checks locally, commit directly to `main`, tag the release, then create the GitHub Release.
 
+## Branch Policy
+
+- `main` is the release branch.
+- Maintainer releases are prepared directly on `main`.
+- Contributors can still open pull requests, but must paste local validation output because the upstream repository does not run GitHub CI.
+- Do not add GitHub Actions, Dependabot, or release automation unless the maintainer explicitly changes this policy.
+
 ## 1. Verify
 
 ```bash

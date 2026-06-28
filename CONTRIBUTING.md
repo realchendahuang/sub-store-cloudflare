@@ -38,7 +38,7 @@ http://localhost:8787/?token=dev-admin-token
 
 ## Checks
 
-Run before opening a pull request:
+Run before opening a pull request or asking the maintainer to merge a patch:
 
 ```bash
 pnpm run check:release
@@ -83,3 +83,7 @@ If you send a patch upstream, keep it focused. Include:
 - any product-scope tradeoff
 
 The maintainer does not use GitHub Actions or Dependabot for this repository, so include local command output from `pnpm run check:release` and `pnpm run deploy:dry-run` when the change touches deployment, Worker behavior, or frontend output.
+
+## Issues
+
+Use the GitHub issue forms for reproducible bugs, deployment problems, and scoped feature requests. Security reports should follow [SECURITY.md](SECURITY.md), not public issues.
