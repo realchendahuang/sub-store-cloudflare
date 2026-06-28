@@ -31,7 +31,7 @@ Cloudflare Worker
 | `sources` | 保存远程订阅 URL 或本地节点文本。 |
 | `collections` | 保存订阅源组合、过滤器和默认模板。 |
 | `templates` | 保存规则模板，包括代理组、规则提供者和规则列表。 |
-| `app_settings` | 保存界面设置和远程订阅请求参数。 |
+| `app_settings` | 保存远程订阅请求参数、主题和必要的前端默认状态。 |
 
 ## 输出流程
 

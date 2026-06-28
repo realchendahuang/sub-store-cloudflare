@@ -144,7 +144,7 @@ https://substore.example.com/download/source/<source-id>/uri?token=<download-tok
 
 ## 8. 备份与恢复
 
-管理界面的「我的」页面可以导出和恢复完整配置，包括订阅源、组合订阅、规则模板和界面设置。也可以直接访问：
+管理界面的「我的」页面可以导出和恢复完整配置，包括订阅源、组合订阅、规则模板和请求设置。也可以直接访问：
 
 ```text
 https://substore.example.com/api/storage?token=<admin-token>

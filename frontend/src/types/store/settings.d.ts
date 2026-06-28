@@ -10,7 +10,6 @@ interface SettingsBase {
   syncTime: number;
   avatarUrl: string;
   hasFetchedSettings: boolean;
-  hasRemoteAppearanceSetting: boolean;
 }
 
 interface SettingsPostData {

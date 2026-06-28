@@ -38,20 +38,6 @@ export default {
       ru: "Русский",
       language: "语言"
     },
-    listView: {
-      switchToSingle: "切换为单列",
-      switchToDual: "切换为双列",
-      disabledInSelectionMode: "多选模式下固定为单列",
-      disabledInNarrowNavigationMode: "窄屏导航模式下固定为单列"
-    },
-    navigationMode: {
-      switchToNarrow: "切换为窄屏导航",
-      switchToWide: "切换为宽屏导航"
-    },
-    simpleMode: {
-      switchToSimple: "开启简洁模式（更紧凑）",
-      switchToNormal: "关闭简洁模式（信息更完整）"
-    },
     actions: {
       refresh: "刷新数据",
       add: "新建订阅"
@@ -674,7 +660,7 @@ export default {
     },
     backup: {
       title: "备份与恢复",
-      desc: "导出和恢复订阅源、组合订阅、规则模板与界面设置。",
+      desc: "导出和恢复订阅源、组合订阅、规则模板与请求设置。",
       export: "备份",
       restore: "恢复",
       restoreTitle: "恢复备份",
@@ -709,74 +695,6 @@ export default {
       backendRequestConcurrencyWaitTime: "并发请求间隔，单位毫秒",
       summary: "当前远程订阅拉取并发 {concurrency}，超时 {timeout}ms。"
     },
-    appearance: {
-      title: "界面",
-      groups: {
-        list: "列表",
-        links: "链接与快捷操作",
-        editor: "编辑器"
-      },
-      simpleMode: "简洁模式",
-      simpleModeDesc: "控制订阅列表和编辑器的展示密度。",
-      listView: {
-        title: "列表视图",
-        desc: "宽屏下订阅列表默认使用单列或双列。",
-        single: "单列",
-        dual: "双列"
-      },
-      showIcon: "显示订阅图标",
-      showIconDesc: "关闭后列表用预览按钮代替图标。",
-      defaultIcon: "使用默认图标",
-      defaultIconDesc: "未配置图标时使用默认 Sub-Store 图标。",
-      simpleRefreshIcon: "简洁模式显示刷新",
-      simpleRefreshIconDesc: "在简洁列表里保留订阅流量刷新按钮。",
-      simpleShowRemark: "简洁模式显示备注",
-      simpleShowRemarkDesc: "让列表搜索和卡片继续显示备注。",
-      foldItemMenu: "折叠菜单按钮",
-      foldItemMenuDesc: "把复制、预览等操作折叠到更多按钮里。",
-      leftSwipeActions: "左滑操作",
-      leftSwipeActionsDesc: "切换列表项滑动操作出现的方向。",
-      subProgress: {
-        title: "流量进度",
-        desc: "控制订阅卡片里的流量进度展示方式。",
-        hidden: "隐藏",
-        background: "背景条"
-      },
-      displayPreviewInWebPage: "网页内预览订阅",
-      displayPreviewInWebPageDesc: "打开订阅链接时先进入内置预览页。",
-      floatingAddButton: "悬浮新建按钮",
-      floatingAddButtonDesc: "把顶部新建按钮移动到页面右下角。",
-      floatingRefreshButton: "悬浮刷新按钮",
-      floatingRefreshButtonDesc: "把顶部刷新按钮移动到页面右下角。",
-      createItemPosition: {
-        title: "新建位置",
-        desc: "控制新订阅或组合订阅插入列表的位置。",
-        top: "顶部",
-        bottom: "底部"
-      },
-      wideScreenNarrowMode: "宽屏窄栏",
-      wideScreenNarrowModeDesc: "桌面宽屏下使用移动端式导航。",
-      editorDisplayMode: {
-        expanded: "展开",
-        collapsed: "折叠",
-        hidden: "隐藏"
-      },
-      editorCommon: {
-        title: "编辑页常用配置",
-        desc: "控制编辑页常用配置区域的默认状态。"
-      },
-      manualSubscriptions: {
-        title: "手动选择订阅",
-        desc: "控制组合订阅里手动选择区域的默认状态。"
-      },
-      editorGrouping: {
-        title: "编辑页分组",
-        desc: "控制编辑页按显示、内容、操作分组。",
-        editOnly: "仅编辑页",
-        disabled: "关闭",
-        always: "始终开启"
-      }
-    },
     btn: {
       cancel: "取消",
       edit: "编辑",
@@ -790,9 +708,7 @@ export default {
         configLoadFailed: "获取配置失败",
         configUpdateFailed: "更新配置失败",
         themeLoading: "切换主题中...",
-        themeFailed: "切换主题失败",
-        appearanceLoading: "保存外观设置中...",
-        appearanceFailed: "保存外观设置失败"
+        themeFailed: "切换主题失败"
       },
       restore: {
         succeed: "恢复成功",

@@ -94,72 +94,6 @@
             </button>
           </div>
         </template>
-
-        <template #right>
-          <button
-            type="button"
-            v-if="appearanceSetting.isSimpleMode"
-            class="navBar-right-button"
-            :style="{ right: navRightButtonRight.simple }"
-            :aria-label="simpleModeToggleTitle"
-            :title="simpleModeToggleTitle"
-            @click.stop="setSimpleMode(false)"
-          >
-            <font-awesome-icon
-              class="navBar-right-icon navBar-right-icon--simple"
-              icon="fa-solid fa-toggle-on"
-              :title="simpleModeToggleTitle"
-            />
-          </button>
-          <button
-            type="button"
-            v-else
-            class="navBar-right-button"
-            :style="{ right: navRightButtonRight.simple }"
-            :aria-label="simpleModeToggleTitle"
-            :title="simpleModeToggleTitle"
-            @click.stop="setSimpleMode(true)"
-          >
-            <font-awesome-icon
-              class="navBar-right-icon navBar-right-icon--simple"
-              icon="fa-solid fa-toggle-off"
-              :title="simpleModeToggleTitle"
-            />
-          </button>
-          <button
-            v-if="showWideScreenNarrowModeToggle"
-            type="button"
-            class="navBar-right-button"
-            :style="{ right: navRightButtonRight.navigation }"
-            :aria-label="wideScreenNarrowModeToggleTitle"
-            :title="wideScreenNarrowModeToggleTitle"
-            @click.stop="handleWideScreenNarrowModeToggle"
-          >
-            <font-awesome-icon
-              class="navBar-right-icon"
-              :icon="isWideScreenNarrowModeActive ? 'fa-solid fa-mobile-screen-button' : 'fa-solid fa-desktop'"
-              :title="wideScreenNarrowModeToggleTitle"
-            />
-          </button>
-          <button
-            v-if="showListViewToggle"
-            type="button"
-            class="navBar-right-button"
-            :style="{ right: navRightButtonRight.list }"
-            :disabled="isListViewModeLocked"
-            :aria-disabled="isListViewModeLocked ? 'true' : 'false'"
-            :aria-label="listViewModeToggleTitle"
-            :title="listViewModeToggleTitle"
-            @click.stop="handleListViewModeToggle"
-          >
-            <font-awesome-icon
-              class="navBar-right-icon"
-              :class="{ 'is-disabled': isListViewModeLocked }"
-              :icon="effectiveListViewMode === 'dual-column' ? 'fa-solid fa-table-columns' : 'fa-solid fa-list'"
-              :title="listViewModeToggleTitle"
-            />
-          </button>
-        </template>
       </nut-navbar>
     </nav>
   </div>
@@ -169,9 +103,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import { useWideScreenNarrowMode } from "@/hooks/useWideScreenNarrowMode";
 import { useGlobalStore } from "@/store/global";
-import { useListViewMode } from "@/hooks/useListViewMode";
 import { useSystemStore } from "@/store/system";
 import { useSettingsStore } from '@/store/settings';
 import { storeToRefs } from "pinia";
@@ -191,20 +123,7 @@ const globalStore = useGlobalStore();
 const systemStore = useSystemStore();
 const settingsStore = useSettingsStore();
 const listSearchStore = useListSearchStore();
-const { changeAppearanceSetting } = settingsStore;
 const { appearanceSetting } = storeToRefs(settingsStore);
-const {
-  effectiveListViewMode,
-  isListViewModeLockedBySelection,
-  isListViewModeLocked,
-  showListViewToggle,
-  toggleListViewMode,
-} = useListViewMode();
-const {
-  isWideScreenNarrowModeActive,
-  showWideScreenNarrowModeToggle,
-  toggleWideScreenNarrowMode,
-} = useWideScreenNarrowMode();
 // 从systemStore获取状态
 const { isPWA, isLandscape, isSmall } = storeToRefs(systemStore);
 
@@ -329,68 +248,6 @@ const back = () => {
   }
 };
 
-const setSimpleMode = (isSimpleMode: boolean) => {
-  // globalStore.setSimpleMode(isSimpleMode);
-  const data = {
-    ...appearanceSetting.value,
-    isSimpleMode: isSimpleMode
-  }
-  changeAppearanceSetting({ appearanceSetting: data })
-};
-
-const listViewModeToggleTitle = computed(() => {
-  if (isListViewModeLockedBySelection.value) {
-    return t("navBar.listView.disabledInSelectionMode");
-  }
-
-  return effectiveListViewMode.value === "dual-column"
-    ? t("navBar.listView.switchToSingle")
-    : t("navBar.listView.switchToDual");
-});
-
-const wideScreenNarrowModeToggleTitle = computed(() => {
-  return isWideScreenNarrowModeActive.value
-    ? t("navBar.navigationMode.switchToWide")
-    : t("navBar.navigationMode.switchToNarrow");
-});
-
-const simpleModeToggleTitle = computed(() => {
-  return appearanceSetting.value.isSimpleMode
-    ? t("navBar.simpleMode.switchToNormal")
-    : t("navBar.simpleMode.switchToSimple");
-});
-
-const NAV_BAR_RIGHT_BUTTON_BASE_RIGHT = 15;
-const NAV_BAR_RIGHT_BUTTON_GAP = 34;
-
-const navRightButtonRight = computed<Record<string, string>>(() => {
-  const buttons: string[] = [];
-  buttons.push("simple");
-  if (showWideScreenNarrowModeToggle.value) {
-    buttons.push("navigation");
-  }
-  if (showListViewToggle.value) {
-    buttons.push("list");
-  }
-
-  return buttons.reduce((acc, key, index) => {
-    acc[key] = `${NAV_BAR_RIGHT_BUTTON_BASE_RIGHT + index * NAV_BAR_RIGHT_BUTTON_GAP}px`;
-    return acc;
-  }, {} as Record<string, string>);
-});
-
-const handleListViewModeToggle = async () => {
-  if (isListViewModeLocked.value) {
-    return;
-  }
-
-  await toggleListViewMode();
-};
-
-const handleWideScreenNarrowModeToggle = async () => {
-  await toggleWideScreenNarrowMode();
-};
-
 const refresh = async () => {
   if (["/preview"].includes(route.path)) {
     window.location.reload();
@@ -471,54 +328,6 @@ const refresh = async () => {
 
         .nutui-iconfont {
           margin-left: 5px;
-        }
-      }
-      .navBar-right-button {
-        position: absolute;
-        top: v-bind(navActionOffset);
-        width: 32px;
-        height: 32px;
-        box-sizing: border-box;
-        padding: 0;
-        margin: 0;
-        border: 0;
-        background: transparent;
-        color: var(--icon-nav-bar-right);
-        cursor: pointer;
-        pointer-events: auto;
-        transform: translateY(-50%);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-
-        &:disabled {
-          cursor: not-allowed;
-          opacity: 0.5;
-        }
-
-        &:focus {
-          outline: none;
-        }
-
-        .navBar-right-icon {
-          width: 14px;
-          height: 14px;
-          font-size: 14px;
-          line-height: 1;
-          color: currentColor;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-
-          // &.navBar-right-icon--simple {
-          //   transform: translateX(1px);
-          // }
-
-          :deep(svg) {
-            width: 14px;
-            height: 14px;
-            font-size: 14px;
-          }
         }
       }
       .icon-group {
@@ -630,9 +439,6 @@ const refresh = async () => {
       }
       .fa-arrow-rotate-right {
         color: currentColor;
-      }
-      .is-disabled {
-        opacity: 0.35;
       }
     }
   }

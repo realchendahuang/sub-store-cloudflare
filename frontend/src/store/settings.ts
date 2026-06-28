@@ -1,6 +1,5 @@
 import { useSettingsApi } from "@/api/settings";
 import i18n from "@/locales";
-import { useGlobalStore } from '@/store/global';
 import { useAppNotifyStore } from "@/store/appNotify";
 import { runFrontendRequestTask } from "@/utils/requestConcurrency";
 import { Toast } from "@nutui/nutui";
@@ -13,16 +12,6 @@ const { t } = i18n.global;
 const LIST_PAGE_VIEW_MODE_STORAGE_KEY = "appearanceSetting.listPageViewMode";
 const NARROW_MODE_LIST_PAGE_VIEW_MODE_STORAGE_KEY = "appearanceSetting.listPageViewModeInWideScreenNarrowMode";
 const WIDE_SCREEN_NARROW_MODE_STORAGE_KEY = "appearanceSetting.useNarrowModeOnWideScreen";
-const LEGACY_APPEARANCE_STORAGE_KEYS = [
-  "isSimpleMode",
-  "isLr",
-  "iconColor",
-  "isDefaultIcon",
-  "iseditorCommon",
-  "isSimpleReicon",
-  "showFloatingRefreshButton",
-  "subProgressStyle",
-];
 
 const normalizeSettingInputValue = (value: unknown) => {
   return value === null || value === undefined ? "" : String(value);
@@ -45,27 +34,8 @@ const syncCachedListPageViewMode = (storageKey: string, mode?: ListPageViewMode)
   }
 };
 
-const getCachedAppearanceBoolean = (storageKey: string, legacyStorageKey: string) => {
-  const cachedValue = localStorage.getItem(storageKey);
-  if (cachedValue === "1") return true;
-  if (cachedValue === "0") return false;
-
-  const legacyValue = localStorage.getItem(legacyStorageKey);
-  if (legacyValue === "1") return true;
-
-  return undefined;
-};
-
 const getCachedWideScreenNarrowMode = () => {
   return localStorage.getItem(WIDE_SCREEN_NARROW_MODE_STORAGE_KEY) === "1";
-};
-
-const hasLocalAppearanceSetting = () => {
-  return LEGACY_APPEARANCE_STORAGE_KEYS.some((key) => localStorage.getItem(key) !== null);
-};
-
-const hasRemoteAppearanceSetting = (appearanceSetting?: SettingsPostData["appearanceSetting"]) => {
-  return Boolean(appearanceSetting && Object.keys(appearanceSetting).length > 0);
 };
 
 const isEditorCommonDisplayMode = (value: unknown): value is EditorCommonDisplayMode => {
@@ -155,7 +125,6 @@ export const useSettingsStore = defineStore("settingsStore", {
       },
       avatarUrl: "",
       hasFetchedSettings: false,
-      hasRemoteAppearanceSetting: false,
     };
   },
   getters: {},
@@ -223,7 +192,6 @@ export const useSettingsStore = defineStore("settingsStore", {
         this.theme.light = res.data.data.theme?.light ?? "light";
 
         this.hasFetchedSettings = true;
-        this.hasRemoteAppearanceSetting = hasRemoteAppearanceSetting(res.data.data.appearanceSetting);
         this.applyAppearanceSetting(res.data.data.appearanceSetting);
       } else {
         this.hasFetchedSettings = false;
@@ -255,70 +223,6 @@ export const useSettingsStore = defineStore("settingsStore", {
         return false;
       }
     },
-    // Move locally cached appearance options into D1 once after first launch.
-    async syncLocalAppearanceSetting() {
-      const globalStore = useGlobalStore();
-      const {
-        isSimpleMode,
-        isLeftRight,
-        isIconColor,
-        isDefaultIcon,
-        isEditorCommon,
-        isSimpleReicon,
-        showFloatingRefreshButton,
-        subProgressStyle,
-      } = globalStore;
-      const hasLocalEditorCommonSetting = localStorage.getItem('iseditorCommon') !== null;
-      const editorCommonDisplayMode = hasLocalEditorCommonSetting
-        ? (isEditorCommon ? "expanded" : "hidden")
-        : "collapsed";
-      const editorGroupingMode = this.appearanceSetting.editorGroupingMode || "edit-only";
-      const data = {
-        isSimpleMode: isSimpleMode ?? false,
-        isLeftRight: isLeftRight ?? false,
-        isIconColor: isIconColor ?? false,
-        isDefaultIcon: isDefaultIcon ?? false,
-        isEditorCommon: editorCommonDisplayMode !== "hidden",
-        editorCommonDisplayMode,
-        manualSubscriptionsDisplayMode: "collapsed",
-        editorGroupingMode,
-        isSimpleReicon: isSimpleReicon ?? false,
-        showFloatingRefreshButton: showFloatingRefreshButton ?? false,
-        subProgressStyle: subProgressStyle ?? "hidden",
-      };
-      if (!hasLocalAppearanceSetting()) {
-        return;
-      }
-
-      if (!this.hasFetchedSettings) {
-        return;
-      }
-
-      if (this.hasRemoteAppearanceSetting) {
-        this.removeLocalAppearanceSetting();
-        return;
-      }
-
-      // 如果有本地持久化的外观设置且后端还没有外观设置，则将其同步到后端
-      await this.changeAppearanceSetting({ appearanceSetting: data });
-      this.hasRemoteAppearanceSetting = true;
-      this.removeLocalAppearanceSetting();
-    },
-    // 清除本地持久化的外观设置
-    removeLocalAppearanceSetting() {
-      const globalStore = useGlobalStore();
-      localStorage.removeItem('isSimpleMode');
-      globalStore.isSimpleMode = this.appearanceSetting.isSimpleMode ?? true;
-      globalStore.setLeftRight(false);
-      globalStore.setIconColor(false);
-      globalStore.setIsDefaultIcon(false);
-      globalStore.setEditorCommon(false);
-      localStorage.removeItem('iseditorCommon');
-      globalStore.isEditorCommon = true;
-      globalStore.setSimpleReicon(false);
-      globalStore.setShowFloatingRefreshButton(false);
-      globalStore.setSubProgressStyle('hidden');
-    },
     async changeTheme(data: SettingsPostData) {
       Toast.loading(t("myPage.notify.save.themeLoading"), { cover: true, id: "theme__loading" });
       const { showNotify } = useAppNotifyStore();
@@ -328,21 +232,6 @@ export const useSettingsStore = defineStore("settingsStore", {
       } else {
         showNotify({
           title: t("myPage.notify.save.themeFailed"),
-          type: "danger",
-        });
-      }
-      Toast.hide("theme__loading");
-    },
-    async changeAppearanceSetting(data: SettingsPostData) {
-      Toast.loading(t("myPage.notify.save.appearanceLoading"), { cover: true, id: "theme__loading" });
-      const { showNotify } = useAppNotifyStore();
-      const res = await settingsApi.setSettings(data);
-      if (res?.data?.status === "success" && res?.data?.data) {
-        this.hasRemoteAppearanceSetting = hasRemoteAppearanceSetting(res.data.data.appearanceSetting);
-        this.applyAppearanceSetting(res.data.data.appearanceSetting);
-      } else {
-        showNotify({
-          title: t("myPage.notify.save.appearanceFailed"),
           type: "danger",
         });
       }

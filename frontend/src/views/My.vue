@@ -109,81 +109,6 @@
       <p v-else class="card-desc">{{ requestSummary }}</p>
     </section>
 
-    <section class="config-card">
-      <div class="title-wrapper">
-        <h1>{{ t("myPage.appearance.title") }}</h1>
-      </div>
-      <nut-cell-group :title="t('myPage.appearance.groups.list')">
-        <nut-cell :title="t('myPage.appearance.simpleMode')" class="cell-item" :desc="t('myPage.appearance.simpleModeDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="simpleMode" size="mini" @change="(value) => saveAppearancePatch({ isSimpleMode: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell class="cell-item" :title="t('myPage.appearance.listView.title')" :desc="listViewModeLabel" @click="showListViewModePicker = true" is-link />
-        <nut-cell :title="t('myPage.appearance.showIcon')" class="cell-item" :desc="t('myPage.appearance.showIconDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="showIcon" size="mini" @change="(value) => saveAppearancePatch({ isShowIcon: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.defaultIcon')" class="cell-item" :desc="t('myPage.appearance.defaultIconDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="defaultIcon" size="mini" @change="(value) => saveAppearancePatch({ isDefaultIcon: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.simpleRefreshIcon')" class="cell-item" :desc="t('myPage.appearance.simpleRefreshIconDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="simpleRefreshIcon" size="mini" @change="(value) => saveAppearancePatch({ isSimpleReicon: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.simpleShowRemark')" class="cell-item" :desc="t('myPage.appearance.simpleShowRemarkDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="simpleShowRemark" size="mini" @change="(value) => saveAppearancePatch({ isSimpleShowRemark: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.foldItemMenu')" class="cell-item" :desc="t('myPage.appearance.foldItemMenuDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="foldItemMenu" size="mini" @change="(value) => saveAppearancePatch({ isSubItemMenuFold: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.leftSwipeActions')" class="cell-item" :desc="t('myPage.appearance.leftSwipeActionsDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="leftSwipeActions" size="mini" @change="(value) => saveAppearancePatch({ isLeftRight: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell class="cell-item" :title="t('myPage.appearance.subProgress.title')" :desc="subProgressStyleLabel" @click="showSubProgressPicker = true" is-link />
-      </nut-cell-group>
-
-      <nut-cell-group :title="t('myPage.appearance.groups.links')">
-        <nut-cell :title="t('myPage.appearance.displayPreviewInWebPage')" class="cell-item" :desc="t('myPage.appearance.displayPreviewInWebPageDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="displayPreviewInWebPage" size="mini" @change="(value) => saveAppearancePatch({ displayPreviewInWebPage: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.floatingAddButton')" class="cell-item" :desc="t('myPage.appearance.floatingAddButtonDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="floatingAddButton" size="mini" @change="(value) => saveAppearancePatch({ showFloatingAddButton: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell :title="t('myPage.appearance.floatingRefreshButton')" class="cell-item" :desc="t('myPage.appearance.floatingRefreshButtonDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="floatingRefreshButton" size="mini" @change="(value) => saveAppearancePatch({ showFloatingRefreshButton: value })" />
-          </template>
-        </nut-cell>
-        <nut-cell class="cell-item" :title="t('myPage.appearance.createItemPosition.title')" :desc="createItemPositionLabel" @click="showCreateItemPositionPicker = true" is-link />
-        <nut-cell :title="t('myPage.appearance.wideScreenNarrowMode')" class="cell-item" :desc="t('myPage.appearance.wideScreenNarrowModeDesc')">
-          <template #link>
-            <nut-switch class="my-switch" v-model="wideScreenNarrowMode" size="mini" @change="setWideScreenNarrowMode" />
-          </template>
-        </nut-cell>
-      </nut-cell-group>
-
-      <nut-cell-group :title="t('myPage.appearance.groups.editor')">
-        <nut-cell class="cell-item" :title="t('myPage.appearance.editorCommon.title')" :desc="editorCommonDisplayModeLabel" @click="showEditorCommonDisplayModePicker = true" is-link />
-        <nut-cell class="cell-item" :title="t('myPage.appearance.manualSubscriptions.title')" :desc="manualSubscriptionsDisplayModeLabel" @click="showManualSubscriptionsDisplayModePicker = true" is-link />
-        <nut-cell class="cell-item" :title="t('myPage.appearance.editorGrouping.title')" :desc="editorGroupingModeLabel" @click="showEditorGroupingModePicker = true" is-link />
-      </nut-cell-group>
-    </section>
-
     <nut-popup v-model:visible="templateImportVisible" position="bottom" round closeable :style="{ height: '82vh' }">
       <div class="template-import-panel">
         <h2>{{ templateEditingId ? t("myPage.templates.editTitle") : t("myPage.templates.importTitle") }}</h2>
@@ -219,66 +144,11 @@
       :ok-text="t('specificWord.confirm')"
       @confirm="handleTemplateTargetConfirm"
     />
-    <DesktopPicker
-      v-model="listViewModeValue"
-      v-model:visible="showListViewModePicker"
-      :columns="listViewModeColumns"
-      :title="t('myPage.appearance.listView.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleListViewModeConfirm"
-    />
-    <DesktopPicker
-      v-model="subProgressStyleValue"
-      v-model:visible="showSubProgressPicker"
-      :columns="subProgressStyleColumns"
-      :title="t('myPage.appearance.subProgress.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleSubProgressStyleConfirm"
-    />
-    <DesktopPicker
-      v-model="createItemPositionValue"
-      v-model:visible="showCreateItemPositionPicker"
-      :columns="createItemPositionColumns"
-      :title="t('myPage.appearance.createItemPosition.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleCreateItemPositionConfirm"
-    />
-    <DesktopPicker
-      v-model="editorCommonDisplayModeValue"
-      v-model:visible="showEditorCommonDisplayModePicker"
-      :columns="editorCommonDisplayModeColumns"
-      :title="t('myPage.appearance.editorCommon.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleEditorCommonDisplayModeConfirm"
-    />
-    <DesktopPicker
-      v-model="manualSubscriptionsDisplayModeValue"
-      v-model:visible="showManualSubscriptionsDisplayModePicker"
-      :columns="manualSubscriptionsDisplayModeColumns"
-      :title="t('myPage.appearance.manualSubscriptions.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleManualSubscriptionsDisplayModeConfirm"
-    />
-    <DesktopPicker
-      v-model="editorGroupingModeValue"
-      v-model:visible="showEditorGroupingModePicker"
-      :columns="editorGroupingModeColumns"
-      :title="t('myPage.appearance.editorGrouping.title')"
-      :cancel-text="t('myPage.btn.cancel')"
-      :ok-text="t('specificWord.confirm')"
-      @confirm="handleEditorGroupingModeConfirm"
-    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { storeToRefs } from "pinia";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { Dialog } from "@nutui/nutui";
 import { useI18n } from "vue-i18n";
 
@@ -300,7 +170,6 @@ const cloudflareApi = useCloudflareApi();
 const cmStore = useCodeStore();
 const { showNotify } = useAppNotifyStore();
 const { t } = useI18n();
-const { appearanceSetting } = storeToRefs(settingsStore);
 const { icon, env } = useBackend();
 const TEMPLATE_EDITOR_ID = "TemplateEditor";
 
@@ -313,30 +182,7 @@ const templateImporting = ref(false);
 const templateImportVisible = ref(false);
 const templateEditingId = ref("");
 const templateTargetPickerVisible = ref(false);
-const showListViewModePicker = ref(false);
-const showSubProgressPicker = ref(false);
-const showCreateItemPositionPicker = ref(false);
-const showEditorCommonDisplayModePicker = ref(false);
-const showManualSubscriptionsDisplayModePicker = ref(false);
-const showEditorGroupingModePicker = ref(false);
 const templates = ref<any[]>([]);
-const simpleMode = ref(Boolean(appearanceSetting.value.isSimpleMode));
-const wideScreenNarrowMode = ref(Boolean(appearanceSetting.value.useNarrowModeOnWideScreen));
-const showIcon = ref(Boolean(appearanceSetting.value.isShowIcon ?? true));
-const defaultIcon = ref(Boolean(appearanceSetting.value.isDefaultIcon));
-const simpleRefreshIcon = ref(Boolean(appearanceSetting.value.isSimpleReicon));
-const simpleShowRemark = ref(Boolean(appearanceSetting.value.isSimpleShowRemark));
-const foldItemMenu = ref(Boolean(appearanceSetting.value.isSubItemMenuFold ?? true));
-const leftSwipeActions = ref(Boolean(appearanceSetting.value.isLeftRight));
-const displayPreviewInWebPage = ref(Boolean(appearanceSetting.value.displayPreviewInWebPage ?? true));
-const floatingAddButton = ref(Boolean(appearanceSetting.value.showFloatingAddButton));
-const floatingRefreshButton = ref(Boolean(appearanceSetting.value.showFloatingRefreshButton));
-const listViewModeValue = ref<ListPageViewMode[]>([appearanceSetting.value.listPageViewMode || "dual-column"]);
-const subProgressStyleValue = ref<string[]>([appearanceSetting.value.subProgressStyle || "hidden"]);
-const createItemPositionValue = ref<CreateItemPosition[]>([appearanceSetting.value.createItemPosition || "bottom"]);
-const editorCommonDisplayModeValue = ref<EditorCommonDisplayMode[]>([appearanceSetting.value.editorCommonDisplayMode || "collapsed"]);
-const manualSubscriptionsDisplayModeValue = ref<EditorSectionFoldMode[]>([appearanceSetting.value.manualSubscriptionsDisplayMode || "collapsed"]);
-const editorGroupingModeValue = ref<EditorGroupingMode[]>([appearanceSetting.value.editorGroupingMode || "edit-only"]);
 
 const requestForm = reactive({
   defaultUserAgent: "",
@@ -360,51 +206,6 @@ const templateTargetColumns = computed(() => {
 const templateTargetLabel = computed(() => {
   return getTargetLabel(templateForm.target);
 });
-const listViewModeColumns = computed(() => [
-  { text: t("myPage.appearance.listView.single"), value: "single-column" },
-  { text: t("myPage.appearance.listView.dual"), value: "dual-column" },
-]);
-const subProgressStyleColumns = computed(() => [
-  { text: t("myPage.appearance.subProgress.hidden"), value: "hidden" },
-  { text: t("myPage.appearance.subProgress.background"), value: "background" },
-]);
-const createItemPositionColumns = computed(() => [
-  { text: t("myPage.appearance.createItemPosition.top"), value: "top" },
-  { text: t("myPage.appearance.createItemPosition.bottom"), value: "bottom" },
-]);
-const editorCommonDisplayModeColumns = computed(() => [
-  { text: t("myPage.appearance.editorDisplayMode.expanded"), value: "expanded" },
-  { text: t("myPage.appearance.editorDisplayMode.collapsed"), value: "collapsed" },
-  { text: t("myPage.appearance.editorDisplayMode.hidden"), value: "hidden" },
-]);
-const manualSubscriptionsDisplayModeColumns = computed(() => [
-  { text: t("myPage.appearance.editorDisplayMode.expanded"), value: "expanded" },
-  { text: t("myPage.appearance.editorDisplayMode.collapsed"), value: "collapsed" },
-]);
-const editorGroupingModeColumns = computed(() => [
-  { text: t("myPage.appearance.editorGrouping.editOnly"), value: "edit-only" },
-  { text: t("myPage.appearance.editorGrouping.disabled"), value: "disabled" },
-  { text: t("myPage.appearance.editorGrouping.always"), value: "always" },
-]);
-const listViewModeLabel = computed(() => {
-  return t(`myPage.appearance.listView.${listViewModeValue.value[0] === "single-column" ? "single" : "dual"}`);
-});
-const subProgressStyleLabel = computed(() => {
-  return t(`myPage.appearance.subProgress.${subProgressStyleValue.value[0] === "background" ? "background" : "hidden"}`);
-});
-const createItemPositionLabel = computed(() => {
-  return t(`myPage.appearance.createItemPosition.${createItemPositionValue.value[0] === "top" ? "top" : "bottom"}`);
-});
-const editorCommonDisplayModeLabel = computed(() => {
-  return t(`myPage.appearance.editorDisplayMode.${editorCommonDisplayModeValue.value[0] || "collapsed"}`);
-});
-const manualSubscriptionsDisplayModeLabel = computed(() => {
-  return t(`myPage.appearance.editorDisplayMode.${manualSubscriptionsDisplayModeValue.value[0] || "collapsed"}`);
-});
-const editorGroupingModeLabel = computed(() => {
-  const value = editorGroupingModeValue.value[0] || "edit-only";
-  return t(`myPage.appearance.editorGrouping.${value === "edit-only" ? "editOnly" : value}`);
-});
 const appName = computed(() => {
   return env.value?.app
     || env.value?.meta?.cloudflare?.env?.SUB_STORE_BACKEND_CUSTOM_NAME
@@ -423,30 +224,6 @@ const backupUrl = computed(() => {
   if (token) url.searchParams.set("token", token);
   return url.toString();
 });
-
-watch(
-  () => appearanceSetting.value,
-  (next) => {
-    simpleMode.value = Boolean(next.isSimpleMode);
-    wideScreenNarrowMode.value = Boolean(next.useNarrowModeOnWideScreen);
-    showIcon.value = Boolean(next.isShowIcon ?? true);
-    defaultIcon.value = Boolean(next.isDefaultIcon);
-    simpleRefreshIcon.value = Boolean(next.isSimpleReicon);
-    simpleShowRemark.value = Boolean(next.isSimpleShowRemark);
-    foldItemMenu.value = Boolean(next.isSubItemMenuFold ?? true);
-    leftSwipeActions.value = Boolean(next.isLeftRight);
-    displayPreviewInWebPage.value = Boolean(next.displayPreviewInWebPage ?? true);
-    floatingAddButton.value = Boolean(next.showFloatingAddButton);
-    floatingRefreshButton.value = Boolean(next.showFloatingRefreshButton);
-    listViewModeValue.value = [next.listPageViewMode || "dual-column"];
-    subProgressStyleValue.value = [next.subProgressStyle || "hidden"];
-    createItemPositionValue.value = [next.createItemPosition || "bottom"];
-    editorCommonDisplayModeValue.value = [next.editorCommonDisplayMode || "collapsed"];
-    manualSubscriptionsDisplayModeValue.value = [next.manualSubscriptionsDisplayMode || "collapsed"];
-    editorGroupingModeValue.value = [next.editorGroupingMode || "edit-only"];
-  },
-  { deep: true },
-);
 
 const syncRequestForm = () => {
   requestForm.defaultUserAgent = settingsStore.defaultUserAgent || "";
@@ -474,71 +251,6 @@ const saveRequestSettings = async () => {
   } finally {
     requestSaving.value = false;
   }
-};
-
-const saveAppearancePatch = async (patch: NonNullable<SettingsPostData["appearanceSetting"]>) => {
-  await settingsStore.changeAppearanceSetting({
-    appearanceSetting: {
-      ...appearanceSetting.value,
-      ...patch,
-    },
-  });
-};
-
-const setWideScreenNarrowMode = async (value: boolean) => {
-  const nextAppearanceSetting = {
-    ...appearanceSetting.value,
-    useNarrowModeOnWideScreen: value,
-  };
-
-  if (value && !nextAppearanceSetting.listPageViewModeInWideScreenNarrowMode) {
-    nextAppearanceSetting.listPageViewModeInWideScreenNarrowMode = nextAppearanceSetting.listPageViewMode || "dual-column";
-  }
-
-  await settingsStore.changeAppearanceSetting({ appearanceSetting: nextAppearanceSetting });
-};
-
-const handleListViewModeConfirm = ({ selectedValue }) => {
-  const value = selectedValue?.[0] === "single-column" ? "single-column" : "dual-column";
-  showListViewModePicker.value = false;
-  saveAppearancePatch({ listPageViewMode: value });
-};
-
-const handleSubProgressStyleConfirm = ({ selectedValue }) => {
-  const value = selectedValue?.[0] === "background" ? "background" : "hidden";
-  showSubProgressPicker.value = false;
-  saveAppearancePatch({ subProgressStyle: value });
-};
-
-const handleCreateItemPositionConfirm = ({ selectedValue }) => {
-  const value = selectedValue?.[0] === "top" ? "top" : "bottom";
-  showCreateItemPositionPicker.value = false;
-  saveAppearancePatch({ createItemPosition: value });
-};
-
-const handleEditorCommonDisplayModeConfirm = ({ selectedValue }) => {
-  const value = ["expanded", "collapsed", "hidden"].includes(selectedValue?.[0])
-    ? selectedValue[0]
-    : "collapsed";
-  showEditorCommonDisplayModePicker.value = false;
-  saveAppearancePatch({
-    editorCommonDisplayMode: value,
-    isEditorCommon: value !== "hidden",
-  });
-};
-
-const handleManualSubscriptionsDisplayModeConfirm = ({ selectedValue }) => {
-  const value = selectedValue?.[0] === "expanded" ? "expanded" : "collapsed";
-  showManualSubscriptionsDisplayModePicker.value = false;
-  saveAppearancePatch({ manualSubscriptionsDisplayMode: value });
-};
-
-const handleEditorGroupingModeConfirm = ({ selectedValue }) => {
-  const value = ["edit-only", "disabled", "always"].includes(selectedValue?.[0])
-    ? selectedValue[0]
-    : "edit-only";
-  showEditorGroupingModePicker.value = false;
-  saveAppearancePatch({ editorGroupingMode: value });
 };
 
 const selectBackupFile = () => {
@@ -802,47 +514,6 @@ onMounted(fetchTemplates);
   background: var(--card-color);
   color: var(--second-text-color);
   overflow: hidden;
-}
-
-.cell-item {
-  box-shadow: none;
-  background: var(--card-color);
-  font-weight: bold;
-
-  :deep(.nut-cell__title) {
-    min-width: 0;
-  }
-
-  :deep(.nut-cell__title .title) {
-    overflow: hidden;
-    color: var(--primary-text-color);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  :deep(.nut-cell__value),
-  :deep(.nut-cell__desc) {
-    font-weight: normal;
-    color: var(--lowest-text-color);
-  }
-
-  :deep(.nut-cell__link) {
-    flex-shrink: 0;
-  }
-}
-
-:deep(.nut-cell-group__warp) {
-  border-radius: 0;
-  background: transparent;
-}
-
-:deep(.nut-cell-group__title) {
-  padding: 12px 16px 6px;
-  color: var(--comment-text-color);
-}
-
-.my-switch {
-  flex-shrink: 0;
 }
 
 .nut-icon {

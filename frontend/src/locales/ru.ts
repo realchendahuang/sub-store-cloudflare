@@ -38,20 +38,6 @@ export default {
       language: "Язык",
       ru: "Русский"
     },
-    listView: {
-      switchToSingle: "Переключить на одну колонку",
-      switchToDual: "Переключить на две колонки",
-      disabledInSelectionMode: "В режиме множественного выбора доступна только одна колонка",
-      disabledInNarrowNavigationMode: "В узком режиме навигации доступна только одна колонка"
-    },
-    navigationMode: {
-      switchToNarrow: "Узкая навигация",
-      switchToWide: "Широкая навигация"
-    },
-    simpleMode: {
-      switchToSimple: "Включить компактный режим",
-      switchToNormal: "Выключить компактный режим (больше деталей)"
-    },
     actions: {
       refresh: "Обновить данные",
       add: "Создать подписку"
@@ -674,7 +660,7 @@ export default {
     },
     backup: {
       title: "Бэкап и восстановление",
-      desc: "Экспорт и восстановление источников, коллекций, шаблонов правил и настроек интерфейса.",
+      desc: "Экспорт и восстановление источников, коллекций, шаблонов правил и настроек запросов.",
       export: "Бэкап",
       restore: "Восстановить",
       restoreTitle: "Восстановить бэкап",
@@ -709,74 +695,6 @@ export default {
       backendRequestConcurrencyWaitTime: "Пауза между параллельными запросами в миллисекундах",
       summary: "Параллельные запросы: {concurrency}; таймаут: {timeout}ms."
     },
-    appearance: {
-      title: "Интерфейс",
-      groups: {
-        list: "Список",
-        links: "Ссылки и быстрые действия",
-        editor: "Редактор"
-      },
-      simpleMode: "Компактный режим",
-      simpleModeDesc: "Управляет плотностью списков и редакторов.",
-      listView: {
-        title: "Вид списка",
-        desc: "Один или два столбца по умолчанию на широких экранах.",
-        single: "Один столбец",
-        dual: "Два столбца"
-      },
-      showIcon: "Показывать иконки подписок",
-      showIconDesc: "Если выключено, вместо иконки будет кнопка предпросмотра.",
-      defaultIcon: "Использовать иконку по умолчанию",
-      defaultIconDesc: "Использовать стандартную иконку Sub-Store, если иконка не задана.",
-      simpleRefreshIcon: "Обновление в компактном режиме",
-      simpleRefreshIconDesc: "Оставить кнопку обновления трафика в компактных карточках.",
-      simpleShowRemark: "Показывать заметки в компактном режиме",
-      simpleShowRemarkDesc: "Оставить заметки видимыми и доступными для поиска.",
-      foldItemMenu: "Сворачивать действия",
-      foldItemMenuDesc: "Скрывать копирование, предпросмотр и другие действия за кнопкой меню.",
-      leftSwipeActions: "Действия свайпом слева",
-      leftSwipeActionsDesc: "Переключить сторону, с которой появляются действия свайпа.",
-      subProgress: {
-        title: "Прогресс трафика",
-        desc: "Как показывать прогресс трафика на карточках подписок.",
-        hidden: "Скрыть",
-        background: "Фоновая полоска"
-      },
-      displayPreviewInWebPage: "Предпросмотр ссылок в веб-интерфейсе",
-      displayPreviewInWebPageDesc: "Открывать сгенерированные ссылки через встроенную страницу предпросмотра.",
-      floatingAddButton: "Плавающая кнопка создания",
-      floatingAddButtonDesc: "Перенести действие создания в правый нижний угол.",
-      floatingRefreshButton: "Плавающая кнопка обновления",
-      floatingRefreshButtonDesc: "Перенести действие обновления в правый нижний угол.",
-      createItemPosition: {
-        title: "Позиция нового элемента",
-        desc: "Куда вставлять новые источники и коллекции.",
-        top: "Сверху",
-        bottom: "Снизу"
-      },
-      wideScreenNarrowMode: "Узкая навигация на desktop",
-      wideScreenNarrowModeDesc: "Использовать мобильную навигацию на широких desktop-экранах.",
-      editorDisplayMode: {
-        expanded: "Развернуто",
-        collapsed: "Свернуто",
-        hidden: "Скрыто"
-      },
-      editorCommon: {
-        title: "Общие настройки редактора",
-        desc: "Состояние блока общих настроек редактора по умолчанию."
-      },
-      manualSubscriptions: {
-        title: "Ручной выбор подписок",
-        desc: "Состояние области ручного выбора в коллекциях по умолчанию."
-      },
-      editorGrouping: {
-        title: "Группировка редактора",
-        desc: "Группировать разделы редактора по отображению, содержимому и действиям.",
-        editOnly: "Только редактор",
-        disabled: "Выключено",
-        always: "Всегда"
-      }
-    },
     btn: {
       cancel: "Отмена",
       edit: "Редактировать",
@@ -790,9 +708,7 @@ export default {
         configLoadFailed: "Не удалось загрузить настройки",
         configUpdateFailed: "Не удалось обновить настройки",
         themeLoading: "Переключение темы...",
-        themeFailed: "Не удалось переключить тему",
-        appearanceLoading: "Сохранение настроек интерфейса...",
-        appearanceFailed: "Не удалось сохранить настройки интерфейса"
+        themeFailed: "Не удалось переключить тему"
       },
       restore: {
         succeed: "Восстановлено",
