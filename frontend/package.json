@@ -19,7 +19,7 @@
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.23.1",
     "@fortawesome/fontawesome-svg-core": "^6.1.1",
-    "@fortawesome/free-solid-svg-icons": "^6.1.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.0",
     "@fortawesome/vue-fontawesome": "^3.0.1",
     "@lezer/highlight": "^1.2.0",
     "@nutui/nutui": "^3.3.8",
