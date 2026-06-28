@@ -52,6 +52,10 @@ export default {
       switchToSimple: "开启简洁模式（更紧凑）",
       switchToNormal: "关闭简洁模式（信息更完整）"
     },
+    actions: {
+      refresh: "刷新数据",
+      add: "新建订阅"
+    },
     listSearch: {
       open: "搜索",
       placeholder: "名称/标签/备注(若开启显示)",
@@ -107,6 +111,21 @@ export default {
       noSub: "没有包含子订阅",
       contain: "手动选择的订阅",
       containTag: "关联的订阅标签"
+    },
+    actions: {
+      openMenu: "展开快捷操作",
+      closeMenu: "收起快捷操作",
+      openApp: "打开订阅官网",
+      preview: "即时预览",
+      copyLink: "复制订阅链接",
+      refresh: "刷新流量信息",
+      edit: "编辑",
+      moreActions: "打开更多操作",
+      cloneConfig: "克隆配置",
+      openDownload: "打开下载链接",
+      delete: "删除",
+      openTarget: "打开 {name} 订阅",
+      copyTarget: "复制 {name} 订阅"
     },
     subItem: {
       local: "本地订阅",

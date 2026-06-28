@@ -88,6 +88,8 @@
             <button
               v-if="appearanceSetting.isSubItemMenuFold"
               class="compare-sub-link"
+              :aria-label="itemMenuVisible ? t('subPage.actions.closeMenu') : t('subPage.actions.openMenu')"
+              :title="itemMenuVisible ? t('subPage.actions.closeMenu') : t('subPage.actions.openMenu')"
               @click.stop="switchItemMenuVisible"
             >
               <font-awesome-icon
@@ -105,6 +107,8 @@
               <button
                 v-if="appOpenBtnVisible"
                 class="compare-sub-link"
+                :aria-label="t('subPage.actions.openApp')"
+                :title="t('subPage.actions.openApp')"
                 @click.stop="openAppUrl"
               >
                 <font-awesome-icon icon="fa-solid fa-square-arrow-up-right" />
@@ -113,11 +117,18 @@
               <button
                 v-if="!appearanceSetting.isShowIcon"
                 class="compare-sub-link"
+                :aria-label="t('subPage.actions.preview')"
+                :title="t('subPage.actions.preview')"
                 @click.stop="compareSub"
               >
                 <font-awesome-icon icon="fa-solid fa-eye" />
               </button>
-              <button class="copy-sub-link" @click.stop="onClickCopyLink">
+              <button
+                class="copy-sub-link"
+                :aria-label="t('subPage.actions.copyLink')"
+                :title="t('subPage.actions.copyLink')"
+                @click.stop="onClickCopyLink"
+              >
                 <font-awesome-icon icon="fa-solid fa-clone" />
               </button>
             </template>
@@ -129,6 +140,8 @@
                   appearanceSetting.isSimpleReicon)
               "
               class="refresh-sub-flow"
+              :aria-label="t('subPage.actions.refresh')"
+              :title="t('subPage.actions.refresh')"
               @click.stop="onClickRefresh"
             >
               <font-awesome-icon icon="fa-solid fa-arrow-rotate-right" />
@@ -137,11 +150,19 @@
             <button
               v-if="!appearanceSetting.isSimpleMode"
               class="copy-sub-link"
+              :aria-label="t('subPage.actions.edit')"
+              :title="t('subPage.actions.edit')"
               @click.stop="onClickEdit"
             >
               <font-awesome-icon icon="fa-solid fa-pen-nib" />
             </button>
-            <button v-else class="refresh-sub-flow" @click.stop="onClickEdit">
+            <button
+              v-else
+              class="refresh-sub-flow"
+              :aria-label="t('subPage.actions.edit')"
+              :title="t('subPage.actions.edit')"
+              @click.stop="onClickEdit"
+            >
               <font-awesome-icon icon="fa-solid fa-pen-nib" />
             </button>
             <!-- 打开侧边栏 -->
@@ -149,6 +170,8 @@
               v-if="!isMobile()"
               ref="moreAction"
               class="copy-sub-link"
+              :aria-label="t('subPage.actions.moreActions')"
+              :title="t('subPage.actions.moreActions')"
               @click.stop="swipeController"
             >
               <font-awesome-icon icon="fa-solid fa-angles-right" />
@@ -228,6 +251,8 @@
           shape="square"
           type="primary"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.cloneConfig')"
+          :title="t('subPage.actions.cloneConfig')"
           @click="onClickCopyConfig"
         >
           <font-awesome-icon icon="fa-solid fa-paste" />
@@ -238,6 +263,8 @@
           shape="square"
           type="success"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.openDownload')"
+          :title="t('subPage.actions.openDownload')"
           @click.stop="onClickOpenDownload"
         >
           <font-awesome-icon icon="fa-solid fa-file-export" />
@@ -255,6 +282,8 @@
           shape="square"
           type="danger"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.delete')"
+          :title="t('subPage.actions.delete')"
           @click="onClickDelete"
         >
           <font-awesome-icon icon="fa-solid fa-trash-can" />
@@ -268,6 +297,8 @@
           shape="square"
           type="primary"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.cloneConfig')"
+          :title="t('subPage.actions.cloneConfig')"
           @click.stop="onClickCopyConfig"
         >
           <font-awesome-icon icon="fa-solid fa-paste" />
@@ -278,6 +309,8 @@
           shape="square"
           type="success"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.openDownload')"
+          :title="t('subPage.actions.openDownload')"
           @click.stop="onClickOpenDownload"
         >
           <font-awesome-icon icon="fa-solid fa-file-export" />
@@ -288,6 +321,8 @@
           shape="square"
           type="danger"
           class="sub-item-swipe-btn"
+          :aria-label="t('subPage.actions.delete')"
+          :title="t('subPage.actions.delete')"
           @click.stop="onClickDelete"
         >
           <font-awesome-icon icon="fa-solid fa-trash-can" />
@@ -304,6 +339,27 @@
     @closeCompare="closeCompare"
     @refresh="refreshCompare"
   />
+  <nut-dialog
+    v-model:visible="previewPanelVisible"
+    pop-class="auto-dialog"
+    :title="t('subPage.previewTitle')"
+    close-on-popstate
+    close-on-click-overlay
+    :lock-scroll="false"
+    no-ok-btn
+    no-cancel-btn
+    @opened="swipe?.close()"
+  >
+    <PreviewPanel
+      v-if="previewPanelVisible"
+      :name="name"
+      :display-name="displayName"
+      :type="props.type"
+      :general="t('subPage.panel.general')"
+      :notify="t('subPage.copyNotify.succeed')"
+      :desc="t('subPage.panel.tips.desc')"
+    />
+  </nut-dialog>
 </template>
 
 <script lang="ts" setup>
@@ -311,7 +367,7 @@ import { Dialog, Toast } from "@nutui/nutui";
 import { useClipboard } from "@vueuse/core";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
-import { computed, createVNode, ref, toRaw } from "vue";
+import { computed, ref, toRaw } from "vue";
 import useV3Clipboard from "vue-clipboard3";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -347,6 +403,7 @@ let scrollTop = 0;
 
 const compareTableIsVisible = ref(false);
 usePopupRoute(compareTableIsVisible);
+const previewPanelVisible = ref(false);
 
 const moreAction = ref();
 const swipe = ref();
@@ -826,25 +883,7 @@ const handleContentClick = (event) => {
 
 const openPreviewPanel = () => {
   if (ismove.value) return;
-  Dialog({
-    title: t("subPage.previewTitle"),
-    content: createVNode(PreviewPanel, {
-      name,
-      displayName,
-      type: props.type,
-      general: t("subPage.panel.general"),
-      notify: t("subPage.copyNotify.succeed"),
-      desc: t(`subPage.panel.tips.desc`),
-    }),
-    onOpened: () => swipe.value.close(),
-    popClass: "auto-dialog",
-    // @ts-ignore
-    closeOnClickOverlay: true,
-    noOkBtn: true,
-    noCancelBtn: true,
-    closeOnPopstate: true,
-    lockScroll: false,
-  });
+  previewPanelVisible.value = true;
 };
 const closeExpandedMenu = () => {
   swipe.value.close();

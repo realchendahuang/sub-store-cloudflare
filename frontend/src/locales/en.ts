@@ -52,6 +52,10 @@ export default {
       switchToSimple: "Enable Simple Mode (more compact)",
       switchToNormal: "Disable Simple Mode (more details)"
     },
+    actions: {
+      refresh: "Refresh data",
+      add: "Create subscription"
+    },
     listSearch: {
       open: "Search",
       placeholder: "Name/tags/remarks (if shown)",
@@ -107,6 +111,21 @@ export default {
       noSub: "No subscription included",
       contain: "Included subs",
       containTag: "Included subscription tags"
+    },
+    actions: {
+      openMenu: "Expand quick actions",
+      closeMenu: "Collapse quick actions",
+      openApp: "Open subscription website",
+      preview: "Preview",
+      copyLink: "Copy subscription link",
+      refresh: "Refresh usage info",
+      edit: "Edit",
+      moreActions: "Open more actions",
+      cloneConfig: "Clone config",
+      openDownload: "Open download link",
+      delete: "Delete",
+      openTarget: "Open {name} subscription",
+      copyTarget: "Copy {name} subscription"
     },
     subItem: {
       local: "Local subscription",

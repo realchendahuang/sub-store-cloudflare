@@ -31,6 +31,8 @@
               @click.stop="refresh"
               class="navBar-left-icon navBar-left-icon--refresh"
               :style="{ left: navLeftButtonLeft.refresh }"
+              :aria-label="t('navBar.actions.refresh')"
+              :title="t('navBar.actions.refresh')"
             >
               <font-awesome-icon
                 class="icon fa-arrow-rotate-right"
@@ -43,6 +45,8 @@
               @click.stop="add(route)"
               class="navBar-left-icon navBar-left-icon--add"
               :style="{ left: navLeftButtonLeft.add }"
+              :aria-label="t('navBar.actions.add')"
+              :title="t('navBar.actions.add')"
             >
               <font-awesome-icon
                 class="icon fa-plus"
@@ -127,6 +131,8 @@
             type="button"
             class="navBar-right-button"
             :style="{ right: navRightButtonRight.navigation }"
+            :aria-label="wideScreenNarrowModeToggleTitle"
+            :title="wideScreenNarrowModeToggleTitle"
             @click.stop="handleWideScreenNarrowModeToggle"
           >
             <font-awesome-icon
@@ -142,6 +148,8 @@
             :style="{ right: navRightButtonRight.list }"
             :disabled="isListViewModeLocked"
             :aria-disabled="isListViewModeLocked ? 'true' : 'false'"
+            :aria-label="listViewModeToggleTitle"
+            :title="listViewModeToggleTitle"
             @click.stop="handleListViewModeToggle"
           >
             <font-awesome-icon

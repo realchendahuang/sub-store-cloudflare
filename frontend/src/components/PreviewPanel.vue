@@ -14,14 +14,24 @@
         </div>
 
         <div class="actions">
-          <button class="copy-sub-link" @click.stop="targetOpen(platform.path)">
+          <button
+            class="copy-sub-link"
+            :aria-label="t('subPage.actions.openTarget', { name: platform.name })"
+            :title="t('subPage.actions.openTarget', { name: platform.name })"
+            @click.stop="targetOpen(platform.path)"
+          >
             <svg-icon
               name="view"
               class="action-icon"
               color="var(--comment-text-color)"
             />
           </button>
-          <button class="copy-sub-link" @click.stop="targetCopy(platform.path)">
+          <button
+            class="copy-sub-link"
+            :aria-label="t('subPage.actions.copyTarget', { name: platform.name })"
+            :title="t('subPage.actions.copyTarget', { name: platform.name })"
+            @click.stop="targetCopy(platform.path)"
+          >
             <svg-icon
               name="copy"
               class="action-icon"
@@ -45,10 +55,12 @@
   import { useSettingsStore } from '@/store/settings';
   import { useCloudflareApi } from '@/api/app';
   import { DOWNLOAD_TARGET_OPTIONS } from '@/constants/subscriptionTargets';
+  import { useI18n } from 'vue-i18n';
 
   const settingsStore = useSettingsStore();
   const { appearanceSetting } = storeToRefs(settingsStore);
 
+  const { t } = useI18n();
   const { copy, isSupported } = useClipboard();
   const { toClipboard: copyFallback } = useV3Clipboard();
   const { showNotify } = useAppNotifyStore();
