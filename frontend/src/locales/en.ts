@@ -361,11 +361,11 @@ export default {
         },
         subInfoUrl: {
           label: "Sub Info URL",
-          placeholder: "URL for fetching subscription usage info(supports headers etc.)",
+          placeholder: "http(s) URL for fetching subscription usage info",
           tips: {
             title: "Sub Info URL",
             content:
-              'Fill in the URL used to fetch subscription usage info. The response body, or response headers subscription-userinfo/profile-web-page-url/plan-name, will be used as the file usage info.\n\nSupported parameters:\nheaders: custom request headers(single-line JSON string)\ninsecure: do not verify the server certificate\nnoCache: do not use cache\nheadersCacheTtl: headers cache ttl(seconds)\n\nExample: http://a.com/userinfo#headers=%7B%22Authorization%22%3A%22Bearer%20token%22%7D',
+              "Fill in an http(s) URL for subscription usage info. The Worker reads the response body or response headers subscription-userinfo/profile-web-page-url/plan-name.\n\nYou can also set flowUrl, flowUserAgent, and flowHeaders in the remote subscription URL hash parameters.",
           },
         },
         subInfoUserAgent: {
@@ -394,7 +394,7 @@ export default {
         url: {
           label: "URL",
           placeholder:
-            "Multiple lines and parameters are supported, please click the button on the left to see the usage.",
+            "One http(s) remote subscription URL per line",
           tips: {
             importFromFile: 'Import From File',
             fullScreenEdit: "Full Screen Editing",
@@ -402,7 +402,7 @@ export default {
             label: "Usage",
             title: "Subscription URL(s)",
             content:
-              "Supports mixing three types of formats with line breaks:\n1. Full remote URL\n2. Internal file reference like /api/file/name\n3. Absolute path for local file\n\nSupported parameters:\n\nheaders: Custom request headers(single-line JSON string)\ninsecure: https requests will not verify the server certificate\ncacheKey: Set the name of the optimistic cache. Suitable for subscriptions that often fail to fetch. When enabled, you can also manage it yourself in the persistent store(prefix: \"sub-store-cached-custom-\").\n\nvalidCheck: error will be reported when expired or there is no remaining traffic\n\nflowUserAgent: the User-Agent for fetching subscription usage info\n\nflowHeaders: custom request headers for fetching subscription usage info(single-line JSON string)\n\nflowUrl: the URL for fetching subscription usage info(using the content of the response body or response headers)\n\nshowRemaining: show remaining traffic instead of usage\n\nnoFlow: do not query for flow\n\nhideExpire: hide expiration time\n\nnoCache: do not use cache\n\ncacheTtl: cache ttl (seconds)\n\nheadersCacheTtl: headers cache ttl (seconds)\n\nresetDay: the day when monthly data usage resets\n\nstartDate: subscription start date\n\ncycleDays: reset cycle (in days).\n\nage-secret-key: age decryption secret key, corresponding to age-secret-key in mihomo proxy-providers, for decrypting fetched remote age armor content. Only AGE-SECRET-KEY-1... X25519 and AGE-SECRET-KEY-PQ-1... MLKEM768-X25519 keys are supported. SSH/passphrase/plugin keys are not supported. This is not the final output encryption key; do not share it or put it in public logs.\n\nFor example: http://a.com?token=1#cycleDays=31&startDate=2024-06-04 \nor http://a.com?token=1#resetDay=15",
+              "Put one full http(s) remote subscription URL on each line. Multiple lines are fetched and merged.\n\nUsage info parameters:\n\nflowUrl: custom URL for subscription usage info; reads the response body or subscription-userinfo/profile-web-page-url/plan-name response headers\nflowUserAgent: User-Agent for usage info requests\nflowHeaders: request headers for usage info requests, as a URL-encoded one-line JSON string\nnoFlow: skip usage info\nhideExpire: hide expiration time\nshowRemaining: show remaining traffic instead of used traffic\n\nThe remote subscription User-Agent can be set on this page. Timeout and concurrency are configured on the My page.\n\nExample: https://example.com/sub?token=1#flowUrl=https%3A%2F%2Fexample.com%2Fuserinfo&showRemaining",
           },
           isEmpty: "URL cannot be empty",
           isIllegal: "Invalid URL",
@@ -415,10 +415,19 @@ export default {
         content: {
           label: "Content",
           placeholder: "",
+          validation: {
+            action: "Validate nodes",
+            checking: "Validating",
+            empty: "Paste local node content first",
+            success: "Parsed {count} node(s)",
+            detail: "Protocol mix: {types}",
+            failed: "No valid nodes parsed",
+            noNodes: "No valid nodes parsed",
+          },
           tips: {
             title: "The content of the subscription",
             content:
-              "Subscription content:\n\n1. Multiple single-line proxy protocols/JSON5/YAML/URI\n\n2. Complete Base64/YAML",
+              "Subscription content:\n\n1. Multiple single-line proxy protocols, Mihomo YAML, or JSON\n\n2. Complete Base64/YAML\n\nCommon protocols are supported: ss, ssr, vmess, vless, trojan, hysteria, hysteria2, tuic, anytls, http, socks5, wireguard",
           },
         },
         icon: {
@@ -454,7 +463,7 @@ export default {
         },
         subUserinfo: {
           label: "Subscription-Userinfo",
-          placeholder: "Value/URL(URL supports headers/noCache/headersCacheTtl etc.)",
+          placeholder: "upload=...; download=...; total=...",
         },
         firstSubFlow: {
           label: 'Pass Through Single Subscription Traffic Info',

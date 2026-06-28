@@ -245,7 +245,7 @@ function decodeMaybeBase64(raw: string) {
 }
 
 function looksLikeStructuredSubscription(text: string) {
-  return /^\w+:\/\//m.test(text) || /^\s*(proxies|proxy-groups|rules)\s*:/m.test(text) || /^\s*[\[{]/.test(text);
+  return /^[a-z][a-z0-9+.-]*:\/\//im.test(text) || /^\s*(proxies|proxy-groups|rules)\s*:/m.test(text) || /^\s*[\[{]/.test(text);
 }
 
 function parseProxies(raw: string): ProxyNode[] {
@@ -300,10 +300,16 @@ function parseProxyUri(line: string, index: number): ProxyNode | undefined {
   try {
     if (line.startsWith("vless://")) return parseVless(line, index);
     if (line.startsWith("anytls://")) return parseAnytls(line, index);
+    if (line.startsWith("hysteria://") || line.startsWith("hy://")) return parseHysteria(line, index);
     if (line.startsWith("hysteria2://") || line.startsWith("hy2://")) return parseHysteria2(line, index);
     if (line.startsWith("trojan://")) return parseTrojan(line, index);
     if (line.startsWith("vmess://")) return parseVmess(line, index);
     if (line.startsWith("ss://")) return parseShadowsocks(line, index);
+    if (line.startsWith("ssr://")) return parseShadowsocksR(line, index);
+    if (line.startsWith("socks://") || line.startsWith("socks5://") || line.startsWith("socks5+tls://")) return parseSocks(line, index);
+    if (line.startsWith("tuic://")) return parseTuic(line, index);
+    if (line.startsWith("wireguard://") || line.startsWith("wg://")) return parseWireGuard(line, index);
+    if (line.startsWith("http://") || line.startsWith("https://")) return parseHttpProxy(line, index);
     return undefined;
   } catch {
     return undefined;
@@ -365,6 +371,26 @@ function parseHysteria2(line: string, index: number): ProxyNode {
   });
 }
 
+function parseHysteria(line: string, index: number): ProxyNode {
+  const url = new URL(line.replace(/^hy:\/\//, "hysteria://"));
+  const params = url.searchParams;
+  return stripUndefined({
+    name: decodeURIComponent(url.hash.slice(1) || `hysteria-${index + 1}`),
+    type: "hysteria",
+    server: url.hostname,
+    port: Number(url.port || 443),
+    auth_str: decodeURIComponent(url.username || params.get("auth") || params.get("auth_str") || ""),
+    protocol: params.get("protocol") || undefined,
+    up: params.get("up") || params.get("upmbps") || undefined,
+    down: params.get("down") || params.get("downmbps") || undefined,
+    sni: params.get("sni") || params.get("peer") || undefined,
+    alpn: commaList(params.get("alpn")),
+    obfs: params.get("obfs") || undefined,
+    "obfs-password": params.get("obfs-password") || undefined,
+    "skip-cert-verify": boolParam(params.get("insecure") || params.get("allowInsecure")),
+  });
+}
+
 function parseTrojan(line: string, index: number): ProxyNode {
   const url = new URL(line);
   return stripUndefined({
@@ -407,7 +433,8 @@ function parseShadowsocks(line: string, index: number): ProxyNode | undefined {
     const [main, hash = ""] = withoutScheme.split("#");
     const decodedMain = main.includes("@") ? main : atob(main);
     const [userInfo, hostInfo] = decodedMain.split("@");
-    const [cipher, password] = userInfo.split(":");
+    const decodedUserInfo = userInfo.includes(":") ? userInfo : decodeBase64UrlText(userInfo);
+    const [cipher, password] = decodedUserInfo.split(":");
     const lastColon = hostInfo.lastIndexOf(":");
     return stripUndefined({
       name: decodeURIComponent(hash || `ss-${index + 1}`),
@@ -421,6 +448,99 @@ function parseShadowsocks(line: string, index: number): ProxyNode | undefined {
   } catch {
     return undefined;
   }
+}
+
+function parseShadowsocksR(line: string, index: number): ProxyNode | undefined {
+  try {
+    const decoded = decodeBase64UrlText(line.slice("ssr://".length));
+    const [main, rawQuery = ""] = decoded.split("/?");
+    const [server, port, protocol, method, obfs, encodedPassword] = main.split(":");
+    const query = new URLSearchParams(rawQuery);
+    const remarks = query.get("remarks");
+    return stripUndefined({
+      name: remarks ? decodeBase64UrlText(remarks) : `ssr-${index + 1}`,
+      type: "ssr",
+      server,
+      port: Number(port),
+      cipher: method,
+      password: decodeBase64UrlText(encodedPassword || ""),
+      protocol,
+      "protocol-param": query.get("protoparam") ? decodeBase64UrlText(query.get("protoparam") || "") : undefined,
+      obfs,
+      "obfs-param": query.get("obfsparam") ? decodeBase64UrlText(query.get("obfsparam") || "") : undefined,
+      udp: true,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSocks(line: string, index: number): ProxyNode | undefined {
+  const normalizedLine = line.replace(/^socks:\/\//, "socks5://").replace(/^socks5\+tls:\/\//, "socks5://");
+  const url = new URL(normalizedLine);
+  if (!url.port) return undefined;
+  return stripUndefined({
+    name: decodeURIComponent(url.hash.slice(1) || `socks5-${index + 1}`),
+    type: "socks5",
+    server: url.hostname,
+    port: Number(url.port),
+    username: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    tls: line.startsWith("socks5+tls://") || boolParam(url.searchParams.get("tls")),
+    udp: true,
+  });
+}
+
+function parseHttpProxy(line: string, index: number): ProxyNode | undefined {
+  const url = new URL(line);
+  if (!url.port) return undefined;
+  return stripUndefined({
+    name: decodeURIComponent(url.hash.slice(1) || `${url.protocol === "https:" ? "https" : "http"}-${index + 1}`),
+    type: "http",
+    server: url.hostname,
+    port: Number(url.port),
+    username: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    tls: url.protocol === "https:",
+  });
+}
+
+function parseTuic(line: string, index: number): ProxyNode {
+  const url = new URL(line);
+  const params = url.searchParams;
+  return stripUndefined({
+    name: decodeURIComponent(url.hash.slice(1) || `tuic-${index + 1}`),
+    type: "tuic",
+    server: url.hostname,
+    port: Number(url.port || 443),
+    uuid: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    sni: params.get("sni") || undefined,
+    alpn: commaList(params.get("alpn")),
+    "skip-cert-verify": boolParam(params.get("allow_insecure") || params.get("insecure")),
+    "disable-sni": boolParam(params.get("disable_sni") || params.get("disable-sni")),
+    "reduce-rtt": boolParam(params.get("reduce_rtt") || params.get("reduce-rtt")),
+    "udp-relay-mode": params.get("udp_relay_mode") || params.get("udp-relay-mode") || undefined,
+    "congestion-controller": params.get("congestion_control") || params.get("congestion-controller") || undefined,
+  });
+}
+
+function parseWireGuard(line: string, index: number): ProxyNode {
+  const url = new URL(line.replace(/^wg:\/\//, "wireguard://"));
+  const params = url.searchParams;
+  return stripUndefined({
+    name: decodeURIComponent(url.hash.slice(1) || `wireguard-${index + 1}`),
+    type: "wireguard",
+    server: url.hostname,
+    port: Number(url.port || 51820),
+    ip: params.get("ip") || params.get("address") || undefined,
+    ipv6: params.get("ipv6") || undefined,
+    "private-key": decodeURIComponent(url.username || params.get("private-key") || params.get("privatekey") || ""),
+    "public-key": params.get("public-key") || params.get("publickey") || params.get("peer-public-key") || undefined,
+    "pre-shared-key": params.get("pre-shared-key") || params.get("presharedkey") || params.get("psk") || undefined,
+    reserved: params.get("reserved") || undefined,
+    udp: true,
+  });
 }
 
 function applyFilters(proxies: ProxyNode[], filters: FilterRule[]) {
@@ -834,6 +954,20 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
     });
   }
 
+  if (proxy.type === "hysteria") {
+    return stripUndefined({
+      type: "hysteria",
+      tag: proxy.name,
+      server: proxy.server,
+      server_port: proxy.port,
+      auth_str: proxy.auth_str,
+      up_mbps: numberOrUndefined(proxy.up),
+      down_mbps: numberOrUndefined(proxy.down),
+      obfs: proxy.obfs ? String(proxy.obfs) : undefined,
+      tls: { enabled: true, server_name: proxy.sni, insecure: Boolean(proxy["skip-cert-verify"]) },
+    });
+  }
+
   if (proxy.type === "anytls") {
     return stripUndefined({
       type: "anytls",
@@ -850,6 +984,21 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
     });
   }
 
+  if (proxy.type === "tuic") {
+    return stripUndefined({
+      type: "tuic",
+      tag: proxy.name,
+      server: proxy.server,
+      server_port: proxy.port,
+      uuid: proxy.uuid,
+      password: proxy.password,
+      congestion_control: proxy["congestion-controller"],
+      udp_relay_mode: proxy["udp-relay-mode"],
+      zero_rtt_handshake: proxy["reduce-rtt"],
+      tls: { enabled: true, server_name: proxy.sni, insecure: Boolean(proxy["skip-cert-verify"]) },
+    });
+  }
+
   if (proxy.type === "trojan") {
     return stripUndefined({
       type: "trojan",
@@ -861,6 +1010,31 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
     });
   }
 
+  if (proxy.type === "socks5") {
+    return stripUndefined({
+      type: "socks",
+      tag: proxy.name,
+      server: proxy.server,
+      server_port: proxy.port,
+      version: "5",
+      username: proxy.username,
+      password: proxy.password,
+      tls: proxy.tls ? { enabled: true } : undefined,
+    });
+  }
+
+  if (proxy.type === "http") {
+    return stripUndefined({
+      type: "http",
+      tag: proxy.name,
+      server: proxy.server,
+      server_port: proxy.port,
+      username: proxy.username,
+      password: proxy.password,
+      tls: proxy.tls ? { enabled: true } : undefined,
+    });
+  }
+
   if (proxy.type === "ss") {
     return stripUndefined({
       type: "shadowsocks",
@@ -869,6 +1043,21 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
       server_port: proxy.port,
       method: proxy.cipher,
       password: proxy.password,
+    });
+  }
+
+  if (proxy.type === "wireguard") {
+    const localAddress = [proxy.ip, proxy.ipv6].map((item) => String(item || "").trim()).filter(Boolean);
+    return stripUndefined({
+      type: "wireguard",
+      tag: proxy.name,
+      server: proxy.server,
+      server_port: proxy.port,
+      local_address: localAddress.length > 0 ? localAddress : undefined,
+      private_key: proxy["private-key"],
+      peer_public_key: proxy["public-key"],
+      pre_shared_key: proxy["pre-shared-key"],
+      reserved: parseWireGuardReserved(proxy.reserved),
     });
   }
 
@@ -929,12 +1118,35 @@ function toProxyUri(proxy: ProxyNode) {
     return `hysteria2://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
+  if (proxy.type === "hysteria") {
+    const params = new URLSearchParams();
+    if (proxy.sni) params.set("sni", String(proxy.sni));
+    if (proxy["skip-cert-verify"]) params.set("insecure", "1");
+    if (proxy.protocol) params.set("protocol", String(proxy.protocol));
+    if (proxy.up) params.set("up", String(proxy.up));
+    if (proxy.down) params.set("down", String(proxy.down));
+    if (proxy.obfs) params.set("obfs", String(proxy.obfs));
+    if (proxy["obfs-password"]) params.set("obfs-password", String(proxy["obfs-password"]));
+    return `hysteria://${encodeURIComponent(String(proxy.auth_str || ""))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+  }
+
   if (proxy.type === "anytls") {
     const params = new URLSearchParams();
     if (proxy.sni || proxy.servername) params.set("sni", String(proxy.sni || proxy.servername));
     if (proxy["skip-cert-verify"]) params.set("insecure", "1");
     if (proxy["client-fingerprint"]) params.set("fp", String(proxy["client-fingerprint"]));
     return `anytls://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+  }
+
+  if (proxy.type === "tuic") {
+    const params = new URLSearchParams();
+    if (proxy.sni) params.set("sni", String(proxy.sni));
+    if (proxy["skip-cert-verify"]) params.set("allow_insecure", "1");
+    if (proxy["disable-sni"]) params.set("disable_sni", "1");
+    if (proxy["reduce-rtt"]) params.set("reduce_rtt", "1");
+    if (proxy["udp-relay-mode"]) params.set("udp_relay_mode", String(proxy["udp-relay-mode"]));
+    if (proxy["congestion-controller"]) params.set("congestion_control", String(proxy["congestion-controller"]));
+    return `tuic://${encodeURIComponent(String(proxy.uuid))}:${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "trojan") {
@@ -944,9 +1156,49 @@ function toProxyUri(proxy: ProxyNode) {
     return `trojan://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
+  if (proxy.type === "socks5") {
+    const params = new URLSearchParams();
+    if (proxy.tls) params.set("tls", "1");
+    const auth = proxy.username ? `${encodeURIComponent(String(proxy.username))}:${encodeURIComponent(String(proxy.password || ""))}@` : "";
+    const scheme = proxy.tls ? "socks5+tls" : "socks5";
+    return `${scheme}://${auth}${proxy.server}:${proxy.port}${params.size > 0 ? `?${params.toString()}` : ""}#${encodeURIComponent(proxy.name)}`;
+  }
+
+  if (proxy.type === "http") {
+    const auth = proxy.username ? `${encodeURIComponent(String(proxy.username))}:${encodeURIComponent(String(proxy.password || ""))}@` : "";
+    const scheme = proxy.tls ? "https" : "http";
+    return `${scheme}://${auth}${proxy.server}:${proxy.port}#${encodeURIComponent(proxy.name)}`;
+  }
+
   if (proxy.type === "ss") {
     const userInfo = base64Utf8(`${proxy.cipher}:${proxy.password}@${proxy.server}:${proxy.port}`);
     return `ss://${userInfo}#${encodeURIComponent(proxy.name)}`;
+  }
+
+  if (proxy.type === "ssr") {
+    const main = [
+      proxy.server,
+      proxy.port,
+      proxy.protocol || "origin",
+      proxy.cipher || "aes-256-cfb",
+      proxy.obfs || "plain",
+      encodeBase64UrlText(String(proxy.password || "")),
+    ].join(":");
+    const params = new URLSearchParams();
+    params.set("remarks", encodeBase64UrlText(proxy.name));
+    if (proxy["protocol-param"]) params.set("protoparam", encodeBase64UrlText(String(proxy["protocol-param"])));
+    if (proxy["obfs-param"]) params.set("obfsparam", encodeBase64UrlText(String(proxy["obfs-param"])));
+    return `ssr://${encodeBase64UrlText(`${main}/?${params.toString()}`)}`;
+  }
+
+  if (proxy.type === "wireguard") {
+    const params = new URLSearchParams();
+    if (proxy.ip) params.set("ip", String(proxy.ip));
+    if (proxy.ipv6) params.set("ipv6", String(proxy.ipv6));
+    if (proxy["public-key"]) params.set("public-key", String(proxy["public-key"]));
+    if (proxy["pre-shared-key"]) params.set("pre-shared-key", String(proxy["pre-shared-key"]));
+    if (proxy.reserved) params.set("reserved", String(proxy.reserved));
+    return `wireguard://${encodeURIComponent(String(proxy["private-key"] || ""))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "vmess") {
@@ -1000,9 +1252,43 @@ function boolParam(value: string | null) {
   return value === "1" || value === "true";
 }
 
+function commaList(value: string | null) {
+  if (!value) return undefined;
+  const list = value.split(",").map((item) => item.trim()).filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
+function numberOrUndefined(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseWireGuardReserved(value: unknown) {
+  if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite);
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const list = value.split(",").map((item) => Number(item.trim())).filter(Number.isFinite);
+  return list.length > 0 ? list : undefined;
+}
+
 function base64Utf8(input: string) {
   const bytes = new TextEncoder().encode(input);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+function decodeBase64UrlText(input: string) {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(input.length / 4) * 4, "=");
+  try {
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function encodeBase64UrlText(input: string) {
+  return base64Utf8(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }

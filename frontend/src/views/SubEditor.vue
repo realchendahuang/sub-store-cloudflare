@@ -228,12 +228,34 @@
               <font-awesome-icon icon="fa-solid fa-cloud-arrow-up" />
               {{ $t(`editorPage.subConfig.basic.url.tips.importFromFile`) }}
             </button>
+            <button class="cimg-button" :disabled="localPreviewLoading || !localContentText.trim()" @click="validateLocalContent()">
+              <font-awesome-icon icon="fa-solid fa-check" />
+              {{ localPreviewLoading ? $t(`editorPage.subConfig.basic.content.validation.checking`) : $t(`editorPage.subConfig.basic.content.validation.action`) }}
+            </button>
             <span class="button-tips" @click="contentTips">
                 <span class="tips">
                   <span>{{$t(`editorPage.subConfig.basic.url.tips.label`)}}</span>
                   <!-- <nut-icon name="tips"></nut-icon> -->
                 </span>
               </span>
+            <div
+              v-if="localPreviewSummary"
+              class="local-preview-summary"
+              :class="`is-${localPreviewSummary.status}`"
+            >
+              <div class="summary-title">
+                <font-awesome-icon :icon="localPreviewSummary.status === 'success' ? 'fa-solid fa-check' : 'fa-solid fa-circle-xmark'" />
+                <span>{{ localPreviewSummary.title }}</span>
+              </div>
+              <div v-if="localPreviewSummary.detail" class="summary-detail">
+                {{ localPreviewSummary.detail }}
+              </div>
+              <div v-if="localPreviewTypeBadges.length > 0" class="summary-types">
+                <nut-tag v-for="item in localPreviewTypeBadges" :key="item">
+                  {{ item }}
+                </nut-tag>
+              </div>
+            </div>
             <div style="margin-left: -15px; margin-right: -15px;max-height: 60vh;overflow: auto;">
               <cmView :isReadOnly="false" id="SubEditer"/>
             </div>
@@ -894,6 +916,13 @@ const actionsChecked = reactive([]);
 const actionsList = reactive([]);
 const isget = ref(false);
 const fileInput = ref(null);
+const localPreviewLoading = ref(false);
+const localPreviewSummary = ref<{
+  status: "success" | "danger";
+  title: string;
+  detail?: string;
+  types?: Record<string, number>;
+} | null>(null);
 const form = reactive<any>({
   name: "",
   displayName: "",
@@ -908,10 +937,18 @@ const form = reactive<any>({
 provide("form", form);
 
 const ignoreList: string[] = ["Quick Setting Operator"];
+const localContentText = computed(() => String(cmStore.EditCode['SubEditer'] || form.content || ""));
+const localPreviewTypeBadges = computed(() => {
+  const types = localPreviewSummary.value?.types || {};
+  return Object.entries(types)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${type} × ${count}`);
+});
 watch(
   () => cmStore.EditCode['SubEditer'],
   (newCode) => {
     form.content = newCode;
+    localPreviewSummary.value = null;
   }
 );
 
@@ -1081,6 +1118,81 @@ const upload = async() => {
     console.error(e);
   }
 }
+const summarizePreviewNodes = (nodes: any[]) => {
+  return nodes.reduce<Record<string, number>>((result, node) => {
+    const type = String(node?.type || t("specificWord.unknownType"));
+    result[type] = (result[type] || 0) + 1;
+    return result;
+  }, {});
+};
+
+const formatPreviewSummary = (nodes: any[]) => {
+  const types = summarizePreviewNodes(nodes);
+  const typeText = Object.entries(types)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${type} × ${count}`)
+    .join(", ");
+  return {
+    title: t("editorPage.subConfig.basic.content.validation.success", { count: nodes.length }),
+    detail: typeText ? t("editorPage.subConfig.basic.content.validation.detail", { types: typeText }) : "",
+    types,
+  };
+};
+
+const validateLocalContent = async (content = localContentText.value, options?: { notify?: boolean }) => {
+  if (form.source !== "local") return false;
+  const raw = String(content || "");
+  if (!raw.trim()) {
+    localPreviewSummary.value = {
+      status: "danger",
+      title: t("editorPage.subConfig.basic.content.validation.empty"),
+    };
+    return false;
+  }
+
+  localPreviewLoading.value = true;
+  try {
+    const res = await cloudflareApi.previewItem("sub", {
+      ...toRaw(form),
+      source: "local",
+      content: raw,
+      process: actionsToProcess(form.process, actionsList, ignoreList),
+    });
+    const responsePayload: any = res?.data;
+    const nodes = Array.isArray(responsePayload?.data?.original) ? responsePayload.data.original : [];
+    if (responsePayload?.status !== "success" || nodes.length === 0) {
+      throw new Error(responsePayload?.error?.message || t("editorPage.subConfig.basic.content.validation.noNodes"));
+    }
+    const summary = formatPreviewSummary(nodes);
+    localPreviewSummary.value = { status: "success", ...summary };
+    if (options?.notify) {
+      showNotify({
+        type: "success",
+        title: summary.title,
+        content: summary.detail,
+      });
+    }
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    localPreviewSummary.value = {
+      status: "danger",
+      title: t("editorPage.subConfig.basic.content.validation.failed"),
+      detail: message,
+    };
+    if (options?.notify) {
+      showNotify({
+        type: "danger",
+        title: t("editorPage.subConfig.basic.content.validation.failed"),
+        content: message,
+      });
+    }
+    return false;
+  } finally {
+    localPreviewLoading.value = false;
+  }
+};
+
 const fileChange = async (event) => {
   const file = event.target.files[0];
   if(!file) return
@@ -1090,23 +1202,7 @@ const fileChange = async (event) => {
     reader.onload = async () => {
       const content = String(reader.result || "");
       cmStore.setEditCode("SubEditer", content);
-      try {
-        await cloudflareApi.previewItem("sub", {
-          ...toRaw(form),
-          source: "local",
-          content,
-          process: actionsToProcess(form.process, actionsList, ignoreList),
-        });
-        showNotify({
-          type: "success",
-          title: "文件导入成功，节点格式已通过校验",
-        });
-      } catch {
-        showNotify({
-          type: "danger",
-          title: "文件已导入，但未解析到有效节点",
-        });
-      }
+      await validateLocalContent(content, { notify: true });
     }
 
     reader.onerror = e => {
@@ -1359,10 +1455,10 @@ const urlValidator = (val: string): Promise<boolean> => {
           .split(/[\r\n]+/)
           .map((i) => i.trim())
           .filter((i) => i.length)
-          .every((i) => /^(http|https):\/\/\S+$/.test(i) || /^\/api\/(file|module)\/(.+)/.test(i) || /^\/.+/.test(i))
+          .every((i) => /^(http|https):\/\/\S+$/.test(i))
       );
     } else {
-      resolve(/^(http|https):\/\/\S+$/.test(val) || /^\/api\/(file|module)\/(.+)/.test(val) || /^\/.+/.test(val));
+      resolve(/^(http|https):\/\/\S+$/.test(val));
     }
   });
 };
@@ -1407,7 +1503,7 @@ const urlValidator = (val: string): Promise<boolean> => {
   const subUserinfoTips = () => {
     Dialog({
         title: '手动设置订阅流量信息',
-        content: '若填写链接, 则使用链接的响应体内容/响应头 subscription-userinfo 作为值. 链接支持 headers/noCache/headersCacheTtl 等参数.\n\n此项值的格式为:\n\nupload=1024; download=10240; total=102400; expire=4115721600; reset_day=14; plan_name=VIP1; app_url=http://a.com\n\n1. app_url, 订阅将有一个可点击跳转的按钮\n\n2. plan_name, hover 时将显示套餐名称\n\n3. reset_day, 流量重置剩余天数(若要设置周期性重置, 可查看订阅链接中的参数说明)\n\n⚠️ 注意: 手动设置的订阅流量信息会附加到订阅自己的流量信息之前. 若包含不合法的内容, 订阅将无法正常使用\n\n例如: http://官网.com 应编码为 http%3A%2F%2F%E5%AE%98%E7%BD%91.com',
+        content: '填写 subscription-userinfo 风格的流量信息。若需要从单独 URL 查询流量，请在远程订阅链接的 # 参数里设置 flowUrl。\n\n格式示例:\n\nupload=1024; download=10240; total=102400; expire=4115721600; reset_day=14; plan_name=VIP1; app_url=http%3A%2F%2Fa.com\n\n1. app_url 会显示为可点击跳转按钮，URL 请编码。\n\n2. plan_name 会作为套餐名称显示。\n\n3. reset_day 表示流量重置剩余天数。\n\n手动填写的值会和远程订阅响应头一起解析。',
         popClass: 'auto-dialog',
         okText: 'OK',
         noCancelBtn: true,
@@ -1842,6 +1938,52 @@ const handleEditGlobalClick = () => {
       line-height: 20px;
     }
   }
+
+  .local-preview-summary {
+    margin: 10px -15px 12px;
+    padding: 10px 12px;
+    border-radius: var(--item-card-radios);
+    border: 1px solid var(--divider-color);
+    background: var(--card-color);
+    color: var(--second-text-color);
+    font-size: 12px;
+
+    &.is-success {
+      border-color: color-mix(in srgb, var(--primary-color) 35%, var(--divider-color));
+
+      .summary-title {
+        color: var(--primary-color);
+      }
+    }
+
+    &.is-danger {
+      border-color: color-mix(in srgb, var(--danger-color, #fa2c19) 35%, var(--divider-color));
+
+      .summary-title {
+        color: var(--danger-color, #fa2c19);
+      }
+    }
+
+    .summary-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .summary-detail {
+      margin-top: 6px;
+      overflow-wrap: anywhere;
+    }
+
+    .summary-types {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+  }
+
   :deep(.nut-form-item__label) {
     width: auto;
   }

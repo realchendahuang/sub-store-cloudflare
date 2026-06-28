@@ -52,6 +52,21 @@ Cloudflare Worker
 
 `/download/source/:id/:target` 走同一套解析和过滤逻辑，只是不读取 collection。
 
+## 输入与核心能力
+
+远程订阅只负责拉取 `http(s)` URL，多个 URL 可以按行填写并合并。本地订阅支持单行 URI、Mihomo YAML、JSON 代理数组和完整 Base64 内容。常用 URI 包括 `ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
+
+这版保留的核心能力是：
+
+- 订阅源管理和组合订阅。
+- 节点解析、过滤、重命名、去重、排序、旗帜和常用属性设置。
+- Mihomo 规则模板和自定义模板。
+- 原始/处理后节点预览，本地节点校验。
+- 订阅流量信息、配置备份与恢复。
+- Mihomo、sing-box、v2ray、URI、JSON 输出。
+
+脚本运行、文件托管、Gist 同步、分享、归档、定时任务和日志系统不在核心路径里。
+
 ## Filters
 
 过滤器是这版自己的小型 JSON DSL，保存在 D1。前端编辑器会把界面里的动作转换成下面这些结构；Worker 只读取这些结构：

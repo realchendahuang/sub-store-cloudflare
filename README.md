@@ -16,12 +16,12 @@ English: [README.en.md](README.en.md)
 - 把多个订阅源组合成一个云端组合订阅。
 - 对节点做区域/类型/正则过滤、重命名、正则删除、去重、正则排序、旗帜处理和常用属性设置。
 - 内置常用 Mihomo 分流模板，也支持导入自己的 JSON/YAML 模板。
-- 在网页里预览处理前后的节点列表。
-- 支持配置备份/恢复、远程订阅请求超时、User-Agent 和并发参数。
+- 在网页里预览处理前后的节点列表，并校验本地节点内容。
+- 支持订阅流量信息、配置备份/恢复、远程订阅请求超时、User-Agent 和并发参数。
 - 输出 Mihomo、sing-box、v2ray、URI 和 JSON。
 - 使用 Worker Secrets 保护管理端和下载链接。
 
-这个项目聚焦“云端聚合 + 云端节点处理 + 云端规则模板 + 最终订阅输出”。它保留日常维护订阅需要的核心链路，不包含 Gist 同步、文件管理、分享、归档、日志面板、队列任务等额外系统。
+这个项目聚焦“云端聚合 + 云端节点处理 + 云端规则模板 + 最终订阅输出”。它保留日常维护订阅需要的核心链路：格式转换、订阅格式化、多订阅合并、规则模板、预览校验、流量信息和导入导出。不包含 Gist 同步、文件管理、分享、归档、脚本运行、日志面板、队列任务等额外系统。
 
 ## 致谢
 
@@ -166,6 +166,13 @@ https://substore.example.com/download/collection/<collection-id>/mihomo?token=<d
 | Templates | Mihomo 的代理组、规则提供者和规则列表。 |
 
 Worker API 保存的过滤器是这版自己的小型 JSON DSL，不暴露前端编辑器内部字段：
+
+输入格式：
+
+- 远程订阅：每行一个 `http(s)` URL，多个 URL 会合并。
+- 本地节点：支持单行 URI、Mihomo YAML、JSON 代理数组，也支持完整 Base64 内容。
+- 常用 URI：`ss`、`ssr`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、`anytls`、`http`、`socks5`、`wireguard`。
+- 流量信息：优先读取订阅响应头 `subscription-userinfo`，也可以手动填写 `upload=...; download=...; total=...`，或通过 `flowUrl` 指定独立查询地址。
 
 过滤器示例：
 

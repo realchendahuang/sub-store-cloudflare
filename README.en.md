@@ -10,12 +10,13 @@ Chinese is the primary documentation language for this repository. See [README.m
 - Combines multiple sources into one cloud-side collection.
 - Filters by region, type, and regex; renames, deletes matched name text, deduplicates, regex-sorts, adds/removes flags, and applies common node options.
 - Provides built-in Mihomo routing templates and supports custom JSON/YAML templates.
-- Previews original and processed node lists in the admin UI.
-- Supports config backup/restore and request options such as User-Agent, timeout, and remote fetch concurrency.
+- Previews original and processed node lists in the admin UI, with local node validation.
+- Supports subscription usage info, config backup/restore, and request options such as User-Agent, timeout, and remote fetch concurrency.
 - Outputs Mihomo, sing-box, v2ray, URI, and JSON.
 - Uses Worker Secrets for admin and download tokens.
 
 The deployment model is intentionally small: Workers Static Assets + Worker API + D1 + Worker Secrets.
+It keeps the core Sub-Store workflow: format conversion, subscription formatting, multi-source collections, routing templates, preview/validation, usage info, and backup/restore.
 
 ## Architecture
 

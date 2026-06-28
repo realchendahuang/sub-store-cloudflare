@@ -346,10 +346,10 @@ export default {
         },
         "subInfoUrl": {
           "label": "URL информации о подписке",
-          "placeholder": "URL для получения данных трафика (поддерживает заголовки и т. д.)",
+          "placeholder": "http(s) URL для получения данных трафика",
           "tips": {
             "title": "URL информации о подписке",
-            "content": "Укажите URL, используемый для запроса данных о подписке. Тело ответа или заголовки (subscription-userinfo/profile-web-page-url/plan-name) будут распарсены как инфо о лимитах.\n\nПоддерживаемые параметры:\nheaders: кастомные заголовки запроса (однострочный JSON)\ninsecure: отключить проверку SSL-сертификата сервера\noCache: не использовать кэш\nheadersCacheTtl: время кэширования заголовков (сек)\n\nПример: http://a.com/userinfo#headers=%7B%22Authorization%22%3A%22Bearer%20token%22%7D"
+            "content": "Укажите http(s) URL для данных трафика. Worker читает тело ответа или заголовки subscription-userinfo/profile-web-page-url/plan-name.\n\nТакже можно задать flowUrl, flowUserAgent и flowHeaders в hash-параметрах удаленной подписки."
           }
         },
         "subInfoUserAgent": {
@@ -375,14 +375,14 @@ export default {
         },
         "url": {
           "label": "URL",
-          "placeholder": "Поддерживается несколько строк и параметров, нажмите кнопку слева для ознакомления.",
+          "placeholder": "Один http(s) URL удаленной подписки на строку",
           "tips": {
             "importFromFile": "Импорт из файла",
             "fullScreenEdit": "Полноэкранный режим",
             "fullScreenEditCancel": "Выйти из полноэкранного режима",
             "label": "Использование",
             "title": "URL подписок",
-            "content": "Поддерживается смешивание трех типов форматов с переносом строки:\n1. Полный удаленный URL\n2. Ссылка на внутренний файл вида /api/file/name\n3. Абсолютный путь к локальному файлу\n\nПоддерживаемые параметры:\n\nheaders: Кастомные заголовки запроса (однострочный JSON)\ninsecure: не проверять SSL-сертификат сервера\ncacheKey: задать имя оптимистичного кэша. Подходит для подписок, которые часто не удается обновить. После включения им также можно управлять в persistent store (префикс: \"sub-store-cached-custom-\").\n\nvalidCheck: выдаст ошибку, если подписка просрочена или закончился трафик\n\nflowUserAgent: User-Agent для запроса данных о трафике\n\nflowHeaders: заголовки для запроса данных о трафике (однострочный JSON)\n\nflowUrl: кастомный URL для запроса трафика (парсит тело или заголовки ответа)\n\nshowRemaining: показывать оставшийся трафик вместо использованного\n\nnoFlow: не опрашивать информацию о трафике\n\nhideExpire: скрыть дату истечения\n\nnoCache: игнорировать кэш\n\ncacheTtl: время жизни кэша (сек)\n\nheadersCacheTtl: время жизни кэша заголовков (сек)\n\nresetDay: день ежемесячного обнуления трафика\n\nstartDate: дата начала подписки\n\ncycleDays: цикл сброса лимитов (в днях).\n\nage-secret-key: age decryption secret key, соответствует age-secret-key в mihomo proxy-providers, используется для расшифровки полученного удаленного age armor содержимого. Поддерживаются только AGE-SECRET-KEY-1... X25519 и AGE-SECRET-KEY-PQ-1... MLKEM768-X25519. SSH/passphrase/plugin keys не поддерживаются. Это не ключ шифрования финального вывода; не публикуйте его и не записывайте в публичные логи.\n\nПример: http://a.com?token=1#cycleDays=31&startDate=2024-06-04 \nили http://a.com?token=1#resetDay=15"
+            "content": "Укажите один полный http(s) URL удаленной подписки на строку. Несколько строк будут скачаны и объединены.\n\nПараметры данных трафика:\n\nflowUrl: отдельный URL для данных трафика; читает тело ответа или заголовки subscription-userinfo/profile-web-page-url/plan-name\nflowUserAgent: User-Agent для запроса данных трафика\nflowHeaders: заголовки запроса данных трафика, URL-encoded однострочный JSON\nnoFlow: не запрашивать данные трафика\nhideExpire: скрыть срок действия\nshowRemaining: показывать остаток трафика вместо использованного\n\nUser-Agent для скачивания удаленной подписки задается на этой странице. Timeout и concurrency настраиваются на странице My.\n\nПример: https://example.com/sub?token=1#flowUrl=https%3A%2F%2Fexample.com%2Fuserinfo&showRemaining"
           },
           "isEmpty": "URL не может быть пустым",
           "isIllegal": "Некорректный URL"
@@ -395,9 +395,18 @@ export default {
         "content": {
           "label": "Содержимое",
           "placeholder": "",
+          "validation": {
+            "action": "Проверить узлы",
+            "checking": "Проверка",
+            "empty": "Сначала вставьте содержимое локальных узлов",
+            "success": "Разобрано узлов: {count}",
+            "detail": "Протоколы: {types}",
+            "failed": "Не найдено действительных узлов",
+            "noNodes": "Не найдено действительных узлов"
+          },
           "tips": {
             "title": "Содержимое подписки",
-            "content": "Формат данных:\n\n1. Набор однострочных прокси-протоколов / JSON5 / YAML / URI-ссылок\n\n2. Сплошной Base64 или готовый YAML-конфиг"
+            "content": "Формат данных:\n\n1. Набор однострочных прокси-протоколов, Mihomo YAML или JSON\n\n2. Сплошной Base64 или готовый YAML-конфиг\n\nПоддерживаются распространенные протоколы: ss, ssr, vmess, vless, trojan, hysteria, hysteria2, tuic, anytls, http, socks5, wireguard"
           }
         },
         "icon": {
@@ -432,7 +441,7 @@ export default {
         },
         "subUserinfo": {
           "label": "Данные подписки в заголовке",
-          "placeholder": "Значение/URL (URL поддерживает заголовки, noCache, headersCacheTtl и др.)"
+          "placeholder": "upload=...; download=...; total=..."
         },
         "firstSubFlow": {
           "label": "Пробрасывать инфо о трафике первой подписки",
