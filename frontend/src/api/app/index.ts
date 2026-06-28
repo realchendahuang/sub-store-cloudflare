@@ -25,6 +25,7 @@ const SOURCE_ACTION_TYPES = new Set([
   'Handle Duplicate Operator',
   'Sort Operator',
 ]);
+const SUPPORTED_RESOLVE_PROVIDERS = new Set(['Google', 'Cloudflare', 'Ali', 'Tencent', 'Custom']);
 
 const REGION_PATTERNS: Record<string, string> = {
   HK: '香港|港|Hong\\s*Kong|\\bHK\\b',
@@ -98,6 +99,10 @@ const regexUnion = (items: unknown[]): string => {
 };
 
 const escapeRegexLiteral = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const normalizeResolveProvider = (value: unknown) => {
+  const provider = String(value || 'Cloudflare');
+  return SUPPORTED_RESOLVE_PROVIDERS.has(provider) ? provider : 'Cloudflare';
+};
 
 const exactTypePattern = (items: unknown[]): string => {
   const values = items
@@ -226,7 +231,7 @@ const toApiFilters = (process: unknown) => {
     if (item.type === 'Resolve Domain Operator') {
       return [{
         type: 'resolve',
-        provider: item.args?.provider || 'Cloudflare',
+        provider: normalizeResolveProvider(item.args?.provider),
         recordType: item.args?.type === 'IPv6' ? 'AAAA' : 'A',
         filter: item.args?.filter || 'disabled',
         url: item.args?.url || '',
@@ -350,7 +355,7 @@ const fromApiFilters = (filters: unknown): UiProcess[] => {
           id: newUiId(),
           type: 'Resolve Domain Operator',
           args: {
-            provider: filter.provider || 'Cloudflare',
+            provider: normalizeResolveProvider(filter.provider),
             type: filter.recordType === 'AAAA' ? 'IPv6' : 'IPv4',
             filter: filter.filter || 'disabled',
             cache: 'disabled',

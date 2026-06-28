@@ -472,7 +472,6 @@ export default {
           des: "Providers(can be controlled by the node field \"_no-resolve\")",
           options: [
             "Google",
-            "IP-API",
             "Cloudflare",
             "Ali",
             "Tencent",

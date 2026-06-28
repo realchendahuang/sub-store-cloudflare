@@ -565,7 +565,7 @@ function processToFilter(input: unknown): FilterRule | FilterRule[] | undefined 
   if (item.type === "Resolve Domain Operator") {
     return {
       type: "resolve",
-      provider: stringValue(args.provider) || "Cloudflare",
+      provider: normalizeResolveProvider(args.provider),
       recordType: args.type === "IPv6" ? "AAAA" : "A",
       filter: stringValue(args.filter) || "disabled",
       url: stringValue(args.url),
@@ -574,6 +574,11 @@ function processToFilter(input: unknown): FilterRule | FilterRule[] | undefined 
     };
   }
   return undefined;
+}
+
+function normalizeResolveProvider(input: unknown) {
+  const provider = stringValue(input) || "Cloudflare";
+  return ["Google", "Cloudflare", "Ali", "Tencent", "Custom"].includes(provider) ? provider : "Cloudflare";
 }
 
 function stringArray(input: unknown): string[] {

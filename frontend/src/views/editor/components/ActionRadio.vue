@@ -83,20 +83,11 @@
 
 <script lang="ts" setup>
   import { Toast, Dialog } from "@nutui/nutui";
-  import semverGt from 'semver/functions/gt';
-  import { useAppNotifyStore } from '@/store/appNotify';
-  import { storeToRefs } from 'pinia';
-  import { useGlobalStore } from '@/store/global';
   import { inject, onMounted, ref, watch } from 'vue';
   import tw from '@/assets/icons/tw.png';
   import { useI18n } from 'vue-i18n';
 
-  const globalStore = useGlobalStore();
   const { t } = useI18n();
-
-  const { showNotify } = useAppNotifyStore();
-
-  const { env } = storeToRefs(globalStore);
 
   const { type, id } = defineProps<{
     type: string;
@@ -110,8 +101,11 @@
   const opt = {
     'Flag Operator': ['add', 'remove'],
     'Sort Operator': ['asc', 'desc', 'random'],
-    'Resolve Domain Operator': ['Google', 'IP-API', 'Cloudflare', 'Ali', 'Tencent', 'Custom'],
+    'Resolve Domain Operator': ['Google', 'Cloudflare', 'Ali', 'Tencent', 'Custom'],
   };
+  const supportedResolveProviders = opt['Resolve Domain Operator'];
+  const normalizeResolveProvider = (provider) =>
+    supportedResolveProviders.includes(provider) ? provider : 'Cloudflare';
 
   const foTwOpt = ['cn', 'ws', 'tw'];
   const rdoTypeOpt = ['IPv4', 'IPv6'];
@@ -120,16 +114,6 @@
   const value = ref();
   const rdoNewVersion = ref(true);
   const foNewVersion = ref(true);
-  
-  // const rdoNewVersion = ref(false);
-  // const foNewVersion = ref(false);
-
-  // try {
-  //   rdoNewVersion.value = semverGt(env.value.version, '2.14.184')
-  // } catch (e) {}
-  // try {
-  //   foNewVersion.value = semverGt(env.value.version, '2.14.119')
-  // } catch (e) {}
 
   const foTw = ref('cn');
   const rdoType = ref('IPv4');
@@ -185,7 +169,7 @@
           value.value = item.args ?? 'asc';
           break;
         case 'Resolve Domain Operator':
-          value.value = item.args?.provider ?? 'Google';
+          value.value = normalizeResolveProvider(item.args?.provider ?? 'Google');
           rdoType.value = item.args?.type ?? 'IPv4';
           if (rdoType.value === 'IP4P') {
             rdoType.value = 'IPv6';
@@ -202,15 +186,6 @@
 
   // 值变化时实时修改 form 的数据
   watch([value, rdoFilter, rdoCache, rdoUrl, rdoEdns, rdoConcurrency, rdoType, foTw], () => {
-    if (['IPv6', 'IP4P'].includes(rdoType.value) && ['IP-API'].includes(value.value)) {
-      showNotify({
-        title: t("editorPage.subConfig.nodeActions['Resolve Domain Operator'].unsupported", {
-          provider: value.value,
-          type: rdoType.value,
-        }),
-        type: 'danger',
-      });
-    }
     const item = form.process.find(item => item.id === id);
     switch (type) {
       case 'Flag Operator':

@@ -472,7 +472,6 @@ export default {
           des: "提供商(可由节点字段 \"_no-resolve\" 控制)",
           options: [
             "Google",
-            "IP-API",
             "Cloudflare",
             "Ali",
             "Tencent",

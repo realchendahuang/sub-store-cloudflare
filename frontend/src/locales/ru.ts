@@ -472,7 +472,6 @@ export default {
           des: "Провайдеры (можно отключить для узла через поле \"_no-resolve\")",
           options: [
             "Google",
-            "IP-API",
             "Cloudflare",
             "Ali",
             "Tencent",
