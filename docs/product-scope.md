@@ -27,7 +27,9 @@ Sub-Store Cloudflare 是一个云端订阅配置器，不是完整 Sub-Store 的
 - Mihomo / Stash 规则模板，以及可导入的自定义模板。
 - 原始节点和处理后节点预览，本地节点格式校验。
 - Mihomo、Stash、Surge、Surfboard、Loon、Egern、Shadowrocket、Quantumult X、sing-box、v2ray、URI 和 JSON 输出。
-- 下载链接 token、管理端 token、配置备份与恢复。
+- 部署级下载 token、独立限时下载授权、管理端 token、配置备份与恢复。
+- 不落库的一次性节点/规则转换和有 50 条上限的配置回收站。
+- 远程订阅允许元数据透传和可自动降级的 Cache API 边缘缓存。
 - 远程订阅 User-Agent、透传 User-Agent、超时和并发设置。
 - 下载链接级临时 `url`、`content`、`ua` 参数，用于一次性复用当前过滤器、模板和输出格式。
 
@@ -43,12 +45,12 @@ JavaScript Filter / Operator 随 Worker 一起由 Wrangler 编译，D1 只保存
 
 - 文件托管和文件管理。
 - Gist / GitLab / 第三方同步。
-- 分享系统。
-- 归档和历史版本系统。
+- 公开分享平台。单资源、可撤销、可过期的私有下载授权属于核心下载链路。
+- 无上限归档和历史版本系统。最多 50 条配置快照的回收站属于误删保护。
 - 运行时脚本字符串、远程脚本加载和脚本市场。构建时打包的受限 Filter / Operator 按上面的免费版设计单独评估。
 - 日志面板。
 - 队列、定时任务、后台 artifact 生成。
-- KV、R2、Durable Objects、Queues、Cron 等额外 Cloudflare 组件。
+- KV、R2、Durable Objects、Queues、Cron 等额外 Cloudflare 组件。Workers Cache API 只作为非持久优化。
 - 多后端兼容层或完整上游 API 兼容层。
 
 这些能力在原版 Sub-Store 里有各自价值，但会把这个仓库从“订阅配置器”推向更大的平台型系统。

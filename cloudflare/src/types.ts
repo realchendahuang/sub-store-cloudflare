@@ -103,6 +103,7 @@ export type SubscriptionTarget =
   | "mihomo"
   | "stash"
   | "surge"
+  | "surge-mac"
   | "surfboard"
   | "loon"
   | "egern"
@@ -112,6 +113,35 @@ export type SubscriptionTarget =
   | "v2ray"
   | "uri"
   | "json";
+
+export type SubscriptionResponseMetadata = {
+  subscriptionUserinfo?: string;
+  profileWebPageUrl?: string;
+  profileUpdateInterval?: string;
+  contentDisposition?: string;
+  etag?: string;
+  lastModified?: string;
+  cacheStatus?: "hit" | "miss" | "refresh" | "stale" | "disabled";
+};
+
+export type DownloadGrantRecord = {
+  id: string;
+  resourceType: "source" | "collection";
+  resourceId: string;
+  target?: SubscriptionTarget;
+  expiresAt?: number;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type RecycleBinRecord = {
+  id: string;
+  resourceType: "source" | "collection" | "template" | "share";
+  resourceId: string;
+  snapshot: Record<string, unknown>;
+  deletedAt: number;
+};
 
 export type SourceRecord = {
   id: string;

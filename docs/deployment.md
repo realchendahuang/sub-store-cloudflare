@@ -6,7 +6,7 @@
 2. Agent / CLI 一键安装器：适合需要导入订阅源、创建组合订阅和返回下载链接的用户。
 3. 手动 Wrangler 部署：适合需要完全控制每一步的人。
 
-默认架构保持 Cloudflare-native：Workers Static Assets + Worker API + D1 + Worker Secrets。
+默认架构保持 Cloudflare-native：Workers Static Assets + Worker API + D1 + Worker Secrets。Workers Cache API 只用于可自动降级的远程订阅短期缓存，不需要额外 provision。
 
 ## 1. Cloudflare 官方一键部署
 
@@ -251,6 +251,19 @@ https://substore.example.com/download/source/<source-id>/uri?token=<download-tok
 ```
 
 `url`、`content` 和 `ua` 只影响本次请求，不会写入 D1。
+
+远程订阅默认边缘缓存 300 秒。可以在“设置 → 请求设置”中把 TTL 设为 `0` 关闭，或者给下载链接添加 `refresh=1` 强制刷新。Cache API 不可用时 Worker 会直接请求上游。
+
+## 从旧版本升级到 v1.0.0
+
+继续使用原来的 D1 和 Worker Secrets，执行正常部署即可：
+
+```bash
+pnpm run migrate:remote
+pnpm run deploy:local
+```
+
+`0003_compatibility_resources.sql` 会新增 `download_grants` 和 `recycle_bin`，不会修改现有 Sources、Collections、Templates 或 Settings。部署后可以在“工具”页使用一次性转换、独立下载授权和回收站。
 
 ## 8. 备份与恢复
 

@@ -25,7 +25,7 @@ export async function isTokenValid(secret: string | undefined, input: string | u
     crypto.subtle.digest("SHA-256", encoder.encode(input)),
     crypto.subtle.digest("SHA-256", encoder.encode(secret)),
   ]);
-  return timingSafeEqual(new Uint8Array(inputDigest), new Uint8Array(secretDigest));
+  return crypto.subtle.timingSafeEqual(inputDigest, secretDigest);
 }
 
 export function getBearerToken(c: Context<{ Bindings: SubStoreEnv }>) {
@@ -74,11 +74,4 @@ export function applySecurityHeaders(response: Response) {
     statusText: response.statusText,
     headers,
   });
-}
-
-function timingSafeEqual(left: Uint8Array, right: Uint8Array) {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) diff |= left[index] ^ right[index];
-  return diff === 0;
 }

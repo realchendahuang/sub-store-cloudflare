@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { failed, isTokenValid } from "../lib/http";
-import { buildSubscription, getTargetContentType, normalizeTarget, normalizeTargetAlias } from "../lib/subscription";
+import { authorizeScopedDownload } from "../lib/compatibility-resources";
+import { buildSubscriptionResult, getTargetContentType, normalizeTarget, normalizeTargetAlias } from "../lib/subscription";
 import { getRoutingTemplate, getSettings, getSource, getSubscriptionCollection, getSubscriptionSources } from "../lib/store";
 import type { SubscriptionCollection, SubscriptionSource, SubscriptionTarget } from "../types";
 
@@ -10,10 +11,10 @@ export const downloadRoutes = new Hono<{ Bindings: SubStoreEnv }>();
 type DownloadContext = Context<{ Bindings: SubStoreEnv }>;
 
 downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
-  const invalidToken = await rejectInvalidDownloadToken(c);
-  if (invalidToken) return invalidToken;
   const target = getDownloadTarget(c);
   if (!target) return failed(c, "Unsupported target", 400);
+  const invalidToken = await rejectInvalidDownloadToken(c, "collection", c.req.param("name"), target);
+  if (invalidToken) return invalidToken;
 
   const collection = await getSubscriptionCollection(c.env, c.req.param("name"));
   if (!collection) return failed(c, "Collection not found", 404);
@@ -27,10 +28,10 @@ downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
 });
 
 downloadRoutes.get("/download/source/:name/:target?/:token?", async (c) => {
-  const invalidToken = await rejectInvalidDownloadToken(c);
-  if (invalidToken) return invalidToken;
   const target = getDownloadTarget(c);
   if (!target) return failed(c, "Unsupported target", 400);
+  const invalidToken = await rejectInvalidDownloadToken(c, "source", c.req.param("name"), target);
+  if (invalidToken) return invalidToken;
 
   const source = await getSource(c.env, c.req.param("name"));
   if (!source || !source.enabled) return failed(c, "Subscription not found", 404);
@@ -70,7 +71,7 @@ async function renderDownload(
     getSettings(c.env),
   ]);
   try {
-    const body = await buildSubscription({
+    const result = await buildSubscriptionResult({
       source,
       collection: options.collection,
       sources,
@@ -79,17 +80,26 @@ async function renderDownload(
       template,
       settings,
       requestUserAgent: c.req.header("user-agent") || "",
+      forceRefresh: ["1", "true"].includes(c.req.query("refresh") || c.req.query("noCache") || ""),
+      waitUntil: (promise) => c.executionCtx.waitUntil(promise),
     });
-    return new Response(body, {
-      headers: {
-        "content-type": getTargetContentType(options.target),
-        "profile-update-interval": "6",
-        "cache-control": "no-store",
-      },
+    const headers = new Headers({
+      "content-type": getTargetContentType(options.target),
+      "profile-update-interval": result.metadata.profileUpdateInterval || "6",
+      "cache-control": "no-store",
     });
+    setResponseHeader(headers, "subscription-userinfo", result.metadata.subscriptionUserinfo);
+    setResponseHeader(headers, "profile-web-page-url", result.metadata.profileWebPageUrl);
+    setResponseHeader(headers, "content-disposition", result.metadata.contentDisposition);
+    setResponseHeader(headers, "x-sub-store-cache", result.metadata.cacheStatus);
+    return new Response(result.body, { headers });
   } catch (error) {
     return failed(c, error instanceof Error ? error.message : String(error), 500);
   }
+}
+
+function setResponseHeader(headers: Headers, name: string, value: string | undefined) {
+  if (value && !/[\r\n]/.test(value)) headers.set(name, value);
 }
 
 type TemporarySourceOverride = {
@@ -136,8 +146,15 @@ function getDownloadToken(c: DownloadContext) {
   return c.req.param("token") || c.req.query("token");
 }
 
-async function rejectInvalidDownloadToken(c: DownloadContext) {
-  if (await isTokenValid(c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN, getDownloadToken(c))) return undefined;
+async function rejectInvalidDownloadToken(
+  c: DownloadContext,
+  resourceType: "source" | "collection",
+  resourceId: string,
+  target: SubscriptionTarget,
+) {
+  const token = getDownloadToken(c);
+  if (await isTokenValid(c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN, token)) return undefined;
+  if (await authorizeScopedDownload(c.env, token, resourceType, resourceId, target)) return undefined;
   return failed(c, "Download token is invalid", 403);
 }
 

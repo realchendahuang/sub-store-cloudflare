@@ -21,6 +21,7 @@ Chinese is the primary documentation language for this repository. See [README.m
 - [AI Agent install](docs/ai-agent-install.md)
 - [Product scope](docs/product-scope.md)
 - [Architecture](docs/architecture.md)
+- [Upstream compatibility matrix](docs/upstream-compatibility.md)
 - [Testing and release gates](docs/testing.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Release process](docs/release.md)
@@ -87,11 +88,14 @@ For Codex, Claude Code, or another local coding agent, copy [agent/install.promp
 - Previews original and processed node lists in the admin UI.
 - Supports subscription usage info, config backup/restore, User-Agent options, pass-through User-Agent, timeout, and remote fetch concurrency.
 - Supports temporary `url`, `content`, and `ua` download parameters for one-off conversion.
-- Outputs Mihomo, Stash, Surge, Surfboard, Loon, Egern, Shadowrocket, Quantumult X, sing-box, v2ray, URI, and JSON.
+- Adds an admin Tools page for unsaved proxy/subscription conversion and Mihomo, Surge, Loon, and Quantumult X rule conversion.
+- Provides scoped expiring download grants, a bounded 50-entry recycle bin, allowlisted response metadata propagation, and optional Workers Cache API caching.
+- Looks up node IP, region, organization, and ASN through a configurable HTTPS provider.
+- Outputs Mihomo, Stash, Surge, Surge Mac, Surfboard, Loon, Egern, Shadowrocket, Quantumult X, sing-box, v2ray, URI, and JSON.
 
 Source, collection, and custom template IDs use 1–64 lowercase letters, numbers, underscores, or hyphens. An empty collection `sourceIds` array means all enabled sources; list IDs explicitly to select only specific sources.
 
-The deployment model is intentionally small: Workers Static Assets + Worker API + D1 + Worker Secrets.
+The deployment model remains small: Workers Static Assets + Worker API + D1 + Worker Secrets, with the Cache API as an optional non-durable optimization.
 
 ## Local Development
 

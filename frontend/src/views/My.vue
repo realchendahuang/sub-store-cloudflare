@@ -103,6 +103,12 @@
         <nut-input class="input" v-model="requestForm.defaultTimeout" :placeholder="t('myPage.request.defaultTimeout')" type="number" input-align="left" />
         <nut-input class="input" v-model="requestForm.backendRequestConcurrency" :placeholder="t('myPage.request.backendRequestConcurrency')" type="number" input-align="left" />
         <nut-input class="input" v-model="requestForm.backendRequestConcurrencyWaitTime" :placeholder="t('myPage.request.backendRequestConcurrencyWaitTime')" type="number" input-align="left" />
+        <nut-input class="input" v-model="requestForm.remoteCacheTtl" :placeholder="t('myPage.request.remoteCacheTtl')" type="number" input-align="left" />
+        <nut-input class="input" v-model="requestForm.nodeInfoApiUrl" :placeholder="t('myPage.request.nodeInfoApiUrl')" type="text" input-align="left" />
+        <label class="boolean-setting">
+          <input v-model="requestForm.remoteCacheStaleOnError" type="checkbox" />
+          {{ t('myPage.request.remoteCacheStaleOnError') }}
+        </label>
       </div>
       <p v-else class="card-desc">{{ requestSummary }}</p>
     </section>
@@ -189,6 +195,9 @@ const requestForm = reactive({
   defaultTimeout: "",
   backendRequestConcurrency: "",
   backendRequestConcurrencyWaitTime: "",
+  remoteCacheTtl: "",
+  remoteCacheStaleOnError: true,
+  nodeInfoApiUrl: "",
 });
 const templateForm = reactive({
   id: "",
@@ -223,6 +232,9 @@ const syncRequestForm = () => {
   requestForm.defaultTimeout = settingsStore.defaultTimeout || "";
   requestForm.backendRequestConcurrency = settingsStore.backendRequestConcurrency || "";
   requestForm.backendRequestConcurrencyWaitTime = settingsStore.backendRequestConcurrencyWaitTime || "";
+  requestForm.remoteCacheTtl = settingsStore.remoteCacheTtl || "300";
+  requestForm.remoteCacheStaleOnError = settingsStore.remoteCacheStaleOnError !== false;
+  requestForm.nodeInfoApiUrl = settingsStore.nodeInfoApiUrl || "https://ipwho.is/{ip}";
 };
 
 const startRequestEdit = () => {
@@ -670,6 +682,15 @@ onMounted(fetchTemplates);
   .input {
     border-bottom: 1px solid var(--divider-color);
   }
+}
+
+.boolean-setting {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--second-text-color);
+  font-size: 13px;
 }
 
 @media screen and (max-width: 430px) {

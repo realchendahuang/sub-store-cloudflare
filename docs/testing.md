@@ -56,7 +56,7 @@ pnpm run check:open-source
 pnpm run check:history -- main
 ```
 
-The Worker tests run through Cloudflare's Vitest integration, apply the real D1 migrations, and dispatch requests to the actual Worker entrypoint. They cover auth, security headers, code-owned built-in templates and scripts, storage restore, download rendering, parsers, and payload limits. `check:scripts` also generates the registry, performs a Wrangler dry-run bundle, and enforces a 2.5 MiB gzip release budget below the 3 MiB Workers Free limit.
+The Worker tests run through Cloudflare's Vitest integration, apply the real D1 migrations, and dispatch requests to the actual Worker entrypoint. They cover auth, security headers, code-owned built-in templates and scripts, storage restore, download rendering, JSON5 and client-line parsers, rule conversion, remote metadata and Cache API behavior, scoped download grants, recycle/restore, and payload limits. `check:scripts` also generates the registry, performs a Wrangler dry-run bundle, and enforces a 2.5 MiB gzip release budget below the 3 MiB Workers Free limit.
 
 ## Deployment Doctor
 

@@ -48,6 +48,7 @@ export default {
     },
     pagesTitle: {
       sub: "Subscriptions",
+      tools: "Compatibility Tools",
       my: "Settings",
       subEditor: "Edit Subscription",
       sourceCreate: "Create Source",
@@ -60,7 +61,45 @@ export default {
   },
   tabBar: {
     sub: "Subscriptions",
+    tools: "Tools",
     my: "Settings"
+  },
+  toolsPage: {
+    converter: {
+      title: "One-shot conversion",
+      desc: "Paste nodes, a subscription, or rules and convert without saving to D1.",
+      proxy: "Nodes / subscription",
+      rule: "Rules",
+      input: "Paste content to convert",
+      output: "Converted result",
+      run: "Convert",
+      copy: "Copy result"
+    },
+    shares: {
+      title: "Scoped share links",
+      desc: "Create revocable and expiring links restricted to one source or collection and optional output target. Tokens are shown only once.",
+      resourceType: "Resource type",
+      resourceId: "Resource ID",
+      target: "Optional output restriction",
+      expires: "Lifetime in hours; 0 never expires",
+      create: "Create link",
+      empty: "No scoped links",
+      disable: "Disable",
+      enable: "Enable"
+    },
+    recycle: {
+      title: "Recycle bin",
+      desc: "Keeps at most 50 deleted configuration records. Restore never overwrites an existing ID.",
+      empty: "Recycle bin is empty",
+      restore: "Restore",
+      purge: "Delete permanently"
+    },
+    notify: {
+      converted: "Conversion complete",
+      copied: "Copied",
+      shareCreated: "Share link created",
+      failed: "Operation failed\n{e}"
+    }
   },
   notFoundPage: {
     title: "Oops! URL Error!",
@@ -695,6 +734,9 @@ export default {
       defaultTimeout: "Request timeout in milliseconds",
       backendRequestConcurrency: "Remote subscription concurrency",
       backendRequestConcurrencyWaitTime: "Wait time between concurrent requests in milliseconds",
+      remoteCacheTtl: "Remote subscription edge-cache TTL in seconds; 0 disables it",
+      remoteCacheStaleOnError: "Use the latest edge cache when a remote source fails",
+      nodeInfoApiUrl: "HTTPS node-info API URL containing {ip}",
       summary: "Remote subscription concurrency is {concurrency}; timeout is {timeout}ms."
     },
     btn: {

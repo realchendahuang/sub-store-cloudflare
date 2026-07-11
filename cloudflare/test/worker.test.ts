@@ -13,6 +13,8 @@ describe("Worker and D1 integration", () => {
       "app_settings",
       "collections",
       "d1_migrations",
+      "download_grants",
+      "recycle_bin",
       "sources",
       "templates",
     ]));
@@ -307,6 +309,86 @@ describe("Worker and D1 integration", () => {
       body: JSON.stringify({ content: "x".repeat(4 * 1024 * 1024) }),
     });
     expect(response.status).toBe(413);
+  });
+
+  it("converts proxies and rules without saving records", async () => {
+    const proxy = await workerRequest("/api/proxy/parse", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        content: "trojan://password@example.com:443#One%20Shot",
+        target: "surge-mac",
+      }),
+    });
+    expect(proxy.status).toBe(200);
+    expect(getPath(await jsonObject(proxy), "data", "content")).toContain("One Shot");
+
+    const rules = await workerRequest("/api/rule/parse", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "DOMAIN-SUFFIX,example.com,Proxy", target: "qx" }),
+    });
+    expect(rules.status).toBe(200);
+    expect(getPath(await jsonObject(rules), "data", "content")).toContain("HOST-SUFFIX");
+  });
+
+  it("creates scoped share links and enforces resource and target restrictions", async () => {
+    await workerRequest("/api/sources", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: "shared-source",
+        name: "Shared Source",
+        type: "local",
+        content: "trojan://password@example.com:443#Shared%20Node",
+      }),
+    });
+    const create = await workerRequest("/api/shares", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ resourceType: "source", resourceId: "shared-source", target: "json", expiresIn: 3600 }),
+    });
+    expect(create.status).toBe(200);
+    const payload = await jsonObject(create);
+    const token = String(getPath(payload, "data", "token"));
+    const id = String(getPath(payload, "data", "id"));
+    expect(token.length).toBeGreaterThan(20);
+
+    const allowed = await workerRequest(`/download/source/shared-source/json?token=${encodeURIComponent(token)}`, {}, false);
+    expect(allowed.status).toBe(200);
+    const wrongTarget = await workerRequest(`/download/source/shared-source/mihomo?token=${encodeURIComponent(token)}`, {}, false);
+    expect(wrongTarget.status).toBe(403);
+
+    await workerRequest(`/api/shares/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
+    });
+    const disabled = await workerRequest(`/download/source/shared-source/json?token=${encodeURIComponent(token)}`, {}, false);
+    expect(disabled.status).toBe(403);
+  });
+
+  it("archives deleted configuration and restores it without overwrite", async () => {
+    await workerRequest("/api/sources", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: "recycled-source",
+        name: "Recycled Source",
+        type: "local",
+        content: "trojan://password@example.com:443#Recycle%20Node",
+      }),
+    });
+    expect((await workerRequest("/api/sources/recycled-source", { method: "DELETE" })).status).toBe(200);
+    expect((await workerRequest("/api/sources/recycled-source")).status).toBe(404);
+
+    const recycle = await workerRequest("/api/recycle-bin");
+    const entries = getPath(await jsonObject(recycle), "data");
+    const entry = Array.isArray(entries) ? entries.find((item) => getPath(item, "resourceId") === "recycled-source") : undefined;
+    expect(entry).toBeTruthy();
+    const entryId = String(getPath(entry, "id"));
+    expect((await workerRequest(`/api/recycle-bin/${entryId}/restore`, { method: "POST" })).status).toBe(200);
+    expect((await workerRequest("/api/sources/recycled-source")).status).toBe(200);
   });
 });
 

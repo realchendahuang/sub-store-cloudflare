@@ -10,9 +10,9 @@ Deploy Sub-Store Cloudflare into the user's Cloudflare account, import their sub
 
 - Keep the app Cloudflare-native and small: Workers Static Assets + Worker API + D1 + Worker Secrets.
 - Use D1 for structured configuration. Do not switch to R2/KV/Durable Objects/Queues/Cron/Pages unless the user explicitly changes the architecture and the code is updated for it.
-- The public data model is `sources`, `collections`, `templates`, `filters`, `settings`, and `sourceIds`.
+- The public data model is `sources`, `collections`, `templates`, `filters`, `settings`, `sourceIds`, scoped `download_grants`, and bounded `recycle_bin` entries.
 - Treat upstream Sub-Store as a reference for retained source, collection, filter, template, preview, backup/restore, and download workflows only.
-- Do not add files, Gist sync, share, archive, runtime-evaluated scripts, logs, queues, cron, or artifact features during install or cleanup work. Build-time bundled Filter / Operator scripts are supported through the existing pipeline.
+- Do not add files, Gist sync, public sharing, unbounded archives, runtime-evaluated scripts, logs, queues, cron, or artifact features during install or cleanup work. Build-time bundled Filter / Operator scripts, scoped download grants, and the bounded configuration recycle bin are supported through the existing pipeline.
 
 ## Deployment Paths
 

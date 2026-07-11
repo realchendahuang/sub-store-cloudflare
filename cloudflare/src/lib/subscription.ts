@@ -1,3 +1,4 @@
+import JSON5 from "json5";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 export { normalizeTarget, normalizeTargetAlias } from "./targets";
 import {
@@ -15,6 +16,7 @@ import type {
   RoutingTemplate,
   RoutingTemplateConfig,
   SubscriptionCollection,
+  SubscriptionResponseMetadata,
   SubscriptionSource,
   SubscriptionTarget,
   TemplateProxyGroup,
@@ -34,32 +36,32 @@ type BuildOptions = {
   template?: RoutingTemplate;
   settings?: AppSettings;
   requestUserAgent?: string;
+  forceRefresh?: boolean;
+  waitUntil?: (promise: Promise<unknown>) => void;
+};
+
+type InternalBuildOptions = BuildOptions & {
+  responseMetadata: Map<string, SubscriptionResponseMetadata>;
 };
 
 const TEST_URL = "https://www.gstatic.com/generate_204";
 
 export function getTargetContentType(target: SubscriptionTarget) {
   if (target === "sing-box" || target === "json") return "application/json; charset=utf-8";
-  if (target === "v2ray" || target === "uri" || target === "surge" || target === "surfboard" || target === "loon" || target === "shadowrocket" || target === "qx") return "text/plain; charset=utf-8";
+  if (target === "v2ray" || target === "uri" || target === "surge" || target === "surge-mac" || target === "surfboard" || target === "loon" || target === "shadowrocket" || target === "qx") return "text/plain; charset=utf-8";
   return "text/yaml; charset=utf-8";
 }
 
 export async function buildSubscription(options: BuildOptions) {
-  const proxies = await loadProxyNodes(options);
-  if (proxies.length === 0) throw new Error("No available nodes found");
+  return (await buildSubscriptionResult(options)).body;
+}
 
-  if (options.target === "mihomo" || options.target === "stash") return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
-  if (options.target === "surge") return renderSurgeProxies(proxies);
-  if (options.target === "surfboard") return renderSurfboardProxies(proxies);
-  if (options.target === "loon") return renderLoonProxies(proxies);
-  if (options.target === "egern") return renderEgernYaml(proxies);
-  if (options.target === "shadowrocket") return renderProxyUris(proxies);
-  if (options.target === "qx") return renderQxProxies(proxies);
-  if (options.target === "sing-box") return renderSingBoxJson(proxies);
-  if (options.target === "v2ray") return base64Utf8(renderProxyUris(proxies));
-  if (options.target === "uri") return renderProxyUris(proxies);
-  if (options.target === "json") return JSON.stringify({ proxies }, null, 2);
-  return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
+export async function buildSubscriptionResult(options: BuildOptions) {
+  const internal: InternalBuildOptions = { ...options, responseMetadata: new Map() };
+  const proxies = await loadProxyNodes(internal);
+  if (proxies.length === 0) throw new Error("No available nodes found");
+  const body = renderBuildTarget(proxies, options);
+  return { body, metadata: selectResponseMetadata(internal), nodes: proxies.length };
 }
 
 export async function previewSubscription(options: Pick<BuildOptions, "source" | "collection" | "sources" | "settings" | "requestUserAgent">) {
@@ -109,12 +111,52 @@ export function validateSubscriptionContent(raw: string) {
   return addPreviewIds(proxies);
 }
 
-async function loadProxyNodes(options: BuildOptions) {
+export async function convertSubscriptionContent(input: {
+  content: string;
+  target: SubscriptionTarget;
+  filters?: FilterRule[];
+  template?: RoutingTemplate;
+  settings?: AppSettings;
+}) {
+  const parsed = parseProxies(decodeMaybeBase64(input.content));
+  if (parsed.length === 0) throw new Error(formatInvalidLocalContentError(input.content));
+  const processed = ensureUniqueProxyNames(await applyFilters(parsed, input.filters || [], input.settings, {
+    targetPlatform: input.target,
+    sourceId: "one-shot",
+  }));
+  const supported = processed.filter((proxy) => isTargetCompatible(proxy, input.target));
+  const output = renderTarget(supported, input.target, input.template?.config);
+  return {
+    content: output,
+    parsed: parsed.length,
+    emitted: supported.length,
+    skipped: processed.length - supported.length,
+    warnings: processed.length === supported.length
+      ? []
+      : [`${processed.length - supported.length} node(s) cannot be represented by ${input.target}`],
+  };
+}
+
+export function isTargetCompatible(proxy: ProxyNode, target: SubscriptionTarget) {
+  if (target === "mihomo" || target === "stash" || target === "json") return true;
+  const commonUri = ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "tuic", "anytls", "http", "socks5", "wireguard"];
+  if (target === "uri" || target === "v2ray" || target === "shadowrocket") return commonUri.includes(proxy.type);
+  if (target === "sing-box") return ["ss", "vmess", "vless", "trojan", "hysteria", "hysteria2", "tuic", "anytls", "http", "socks5", "wireguard"].includes(proxy.type);
+  if (target === "surge") return ["ss", "vmess", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls", "snell"].includes(proxy.type);
+  if (target === "surge-mac") return ["ss", "vmess", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls", "snell", "ssh", "h2-connect"].includes(proxy.type);
+  if (target === "surfboard") return ["ss", "vmess", "trojan", "http", "socks5"].includes(proxy.type);
+  if (target === "loon") return ["ss", "ssr", "vmess", "vless", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls", "wireguard"].includes(proxy.type);
+  if (target === "qx") return ["ss", "ssr", "vmess", "vless", "trojan", "http", "socks5", "anytls"].includes(proxy.type);
+  if (target === "egern") return ["ss", "vmess", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls"].includes(proxy.type);
+  return false;
+}
+
+async function loadProxyNodes(options: InternalBuildOptions) {
   const sources = getSources(options).filter((sub) => sub.enabled !== false);
   if (sources.length === 0) return [];
 
   const tasks = sources.map((sub) => async () => applyFilters(
-    parseProxies(await loadSubscriptionRaw(sub, options.settings, options.requestUserAgent)),
+    parseProxies(await loadSubscriptionRaw(sub, options.settings, options.requestUserAgent, options)),
     getFilters(sub),
     options.settings,
     { targetPlatform: options.target, sourceId: sub.id },
@@ -146,8 +188,16 @@ function getFilters(input: SubscriptionSource | SubscriptionCollection | undefin
   return Array.isArray(filters) ? (filters as FilterRule[]) : [];
 }
 
-async function loadSubscriptionRaw(sub: SubscriptionSource, settings?: AppSettings, requestUserAgent?: string) {
-  if (sub.type === "local" || sub.content) return String(sub.content || sub.url || "");
+async function loadSubscriptionRaw(
+  sub: SubscriptionSource,
+  settings?: AppSettings,
+  requestUserAgent?: string,
+  runtime?: Pick<InternalBuildOptions, "responseMetadata" | "forceRefresh" | "waitUntil">,
+) {
+  if (sub.type === "local" || sub.content) {
+    runtime?.responseMetadata.set(sub.id, metadataFromSource(sub));
+    return String(sub.content || sub.url || "");
+  }
 
   const urls = splitSourceUrls(sub.url);
   if (urls.length === 0) throw new Error(`Remote source ${sub.name} has no valid URL`);
@@ -156,15 +206,17 @@ async function loadSubscriptionRaw(sub: SubscriptionSource, settings?: AppSettin
   }
 
   const contents = await runWithConcurrency(
-    urls.map((url) => async () => fetchSubscriptionUrl(url, sub, settings, requestUserAgent)),
+    urls.map((url) => async () => fetchSubscriptionUrl(url, sub, settings, requestUserAgent, runtime)),
     getRequestConcurrency(settings),
     getRequestConcurrencyWait(settings),
   );
-  const totalBytes = contents.reduce((total, content) => total + utf8ByteLength(content), 0);
+  const totalBytes = contents.reduce((total, item) => total + utf8ByteLength(item.content), 0);
   if (totalBytes > MAX_REMOTE_SOURCE_TOTAL_BYTES) {
     throw new Error(`Remote source ${sub.name} exceeds the ${MAX_REMOTE_SOURCE_TOTAL_BYTES / (1024 * 1024)} MiB combined limit`);
   }
-  return contents.map(decodeMaybeBase64).join("\n");
+  const metadata = contents.map((item) => item.metadata).find((item) => Object.keys(item).length > 0) || metadataFromSource(sub);
+  runtime?.responseMetadata.set(sub.id, metadata);
+  return contents.map((item) => decodeMaybeBase64(item.content)).join("\n");
 }
 
 function splitSourceUrls(raw: string) {
@@ -174,17 +226,56 @@ function splitSourceUrls(raw: string) {
     .filter((item) => /^https?:\/\//i.test(item));
 }
 
-async function fetchSubscriptionUrl(url: string, sub: SubscriptionSource, settings?: AppSettings, requestUserAgent?: string) {
+async function fetchSubscriptionUrl(
+  url: string,
+  sub: SubscriptionSource,
+  settings?: AppSettings,
+  requestUserAgent?: string,
+  runtime?: Pick<InternalBuildOptions, "forceRefresh" | "waitUntil">,
+) {
+  const cacheTtl = numberSetting(sub.meta?.cacheTtl ?? settings?.remoteCacheTtl, 300, 0, 3600);
+  const cacheKey = cacheTtl > 0 ? await remoteCacheKey(url, getSourceUserAgent(sub, settings, requestUserAgent)) : undefined;
+  const cached = cacheKey ? await safeCacheMatch(cacheKey) : undefined;
+  if (cached && !runtime?.forceRefresh) {
+    return {
+      content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`),
+      metadata: metadataFromResponse(cached, "hit"),
+    };
+  }
   const controller = new AbortController();
   const timeout = getRequestTimeout(settings);
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
+    const requestHeaders: Record<string, string> = { "user-agent": getSourceUserAgent(sub, settings, requestUserAgent) };
+    if (cached?.headers.get("x-sub-store-etag")) requestHeaders["if-none-match"] = cached.headers.get("x-sub-store-etag") || "";
+    if (cached?.headers.get("x-sub-store-last-modified")) requestHeaders["if-modified-since"] = cached.headers.get("x-sub-store-last-modified") || "";
     const response = await fetch(url, {
-      headers: { "user-agent": getSourceUserAgent(sub, settings, requestUserAgent) },
+      headers: requestHeaders,
       signal: controller.signal,
     });
+    if (response.status === 304 && cached) {
+      return {
+        content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`),
+        metadata: metadataFromResponse(cached, "refresh"),
+      };
+    }
     if (!response.ok) throw new Error(`Remote source ${sub.name} failed: ${response.status}`);
-    return readResponseText(response, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Remote source ${sub.name}`);
+    const content = await readResponseText(response, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Remote source ${sub.name}`);
+    const metadata = metadataFromResponse(response, runtime?.forceRefresh ? "refresh" : "miss");
+    if (cacheKey && cacheTtl > 0) {
+      const put = safeCachePut(cacheKey, content, metadata, cacheTtl);
+      if (runtime?.waitUntil) runtime.waitUntil(put);
+      else await put;
+    }
+    return { content, metadata };
+  } catch (error) {
+    if (cached && settings?.remoteCacheStaleOnError !== false) {
+      return {
+        content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Stale remote source ${sub.name}`),
+        metadata: metadataFromResponse(cached, "stale"),
+      };
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -302,7 +393,7 @@ function stableProxyId(proxy: ProxyNode, index: number) {
 
 function parseJsonProxies(raw: string) {
   try {
-    const payload = JSON.parse(raw);
+    const payload = JSON5.parse(raw);
     const proxies = Array.isArray(payload) ? payload : Array.isArray(payload.proxies) ? payload.proxies : [];
     return proxies.map(normalizeProxy).filter(isProxyNode);
   } catch {
@@ -557,6 +648,48 @@ function parseNamedClientProxyLine(line: string, index: number): ProxyNode | und
     });
   }
 
+  if (kind === "snell") {
+    return stripUndefined({
+      ...common,
+      name,
+      type: "snell",
+      server,
+      port,
+      psk: clientOption(options, "psk") || clientOption(options, "password") || positionalValues[0],
+      version: numberOrUndefined(clientOption(options, "version")) || 3,
+      obfs: clientOption(options, "obfs"),
+      "obfs-host": clientOption(options, "obfs-host"),
+    });
+  }
+
+  if (kind === "ssh") {
+    return stripUndefined({
+      ...common,
+      name,
+      type: "ssh",
+      server,
+      port,
+      username: clientOption(options, "username") || positionalValues[0],
+      password: clientOption(options, "password") || positionalValues[1],
+      "private-key": clientOption(options, "private-key"),
+      "host-key": clientOption(options, "host-key"),
+    });
+  }
+
+  if (kind === "h2-connect") {
+    return stripUndefined({
+      ...common,
+      name,
+      type: "h2-connect",
+      server,
+      port,
+      username: clientOption(options, "username"),
+      password: clientOption(options, "password"),
+      tls: optionBoolean(clientOption(options, "tls")) ?? true,
+      sni: clientOption(options, "sni") || clientOption(options, "tls-name"),
+    });
+  }
+
   return undefined;
 }
 
@@ -567,7 +700,7 @@ function normalizeClientProxyKind(input: string | undefined) {
   if (value === "https") return "http";
   if (value === "hysteria2" || value === "hysteria 2") return "hysteria2";
   if (value === "tuic-v5") return "tuic";
-  if (["ss", "ssr", "vmess", "vless", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls"].includes(value)) return value;
+  if (["ss", "ssr", "vmess", "vless", "trojan", "http", "socks5", "hysteria2", "tuic", "anytls", "snell", "ssh", "h2-connect"].includes(value)) return value;
   return "";
 }
 
@@ -1431,8 +1564,12 @@ function renderSurgeProxies(proxies: ProxyNode[]) {
   return renderTextProxyList(proxies, "surge", toSurgeProxyLine);
 }
 
+function renderSurgeMacProxies(proxies: ProxyNode[]) {
+  return renderTextProxyList(proxies, "surge-mac", toSurgeMacProxyLine);
+}
+
 function renderSurfboardProxies(proxies: ProxyNode[]) {
-  return renderTextProxyList(proxies, "surfboard", toSurgeProxyLine);
+  return renderTextProxyList(proxies, "surfboard", toSurfboardProxyLine);
 }
 
 function renderLoonProxies(proxies: ProxyNode[]) {
@@ -1491,7 +1628,147 @@ function toSurgeProxyLine(proxy: ProxyNode) {
     entries.unshift(["password", proxy.password], ["sni", proxy.sni || proxy.servername]);
     return joinTextProxy(base, entries);
   }
+  if (proxy.type === "snell") {
+    entries.unshift(["psk", proxy.psk || proxy.password], ["version", proxy.version || 3]);
+    return joinTextProxy(`${name}=snell,${proxy.server},${proxy.port}`, entries);
+  }
   return undefined;
+}
+
+function toSurgeMacProxyLine(proxy: ProxyNode) {
+  if (proxy.type === "ssh") {
+    const entries = commonTextOptions(proxy);
+    entries.unshift(["username", proxy.username], ["password", proxy.password], ["private-key", proxy["private-key"]]);
+    return joinTextProxy(`${sanitizeTextProxyName(proxy.name)}=ssh,${proxy.server},${proxy.port}`, entries);
+  }
+  if (proxy.type === "snell") {
+    const entries = commonTextOptions(proxy);
+    entries.unshift(["psk", proxy.psk || proxy.password], ["version", proxy.version || 3]);
+    return joinTextProxy(`${sanitizeTextProxyName(proxy.name)}=snell,${proxy.server},${proxy.port}`, entries);
+  }
+  if (proxy.type === "h2-connect") {
+    const entries = commonTextOptions(proxy);
+    entries.unshift(["username", proxy.username], ["password", proxy.password], ["tls", proxy.tls], ["sni", proxy.sni || proxy.servername]);
+    return joinTextProxy(`${sanitizeTextProxyName(proxy.name)}=h2-connect,${proxy.server},${proxy.port}`, entries);
+  }
+  return toSurgeProxyLine(proxy);
+}
+
+function toSurfboardProxyLine(proxy: ProxyNode) {
+  return ["ss", "vmess", "trojan", "http", "socks5"].includes(proxy.type)
+    ? toSurgeProxyLine(proxy)
+    : undefined;
+}
+
+function renderTarget(proxies: ProxyNode[], target: SubscriptionTarget, template?: RoutingTemplateConfig) {
+  if (proxies.length === 0) throw new Error(`No supported nodes for ${target} output`);
+  if (target === "mihomo" || target === "stash") return renderMihomoYaml(proxies, new URL("https://sub-store.local/convert"), template);
+  if (target === "surge") return renderSurgeProxies(proxies);
+  if (target === "surge-mac") return renderSurgeMacProxies(proxies);
+  if (target === "surfboard") return renderSurfboardProxies(proxies);
+  if (target === "loon") return renderLoonProxies(proxies);
+  if (target === "egern") return renderEgernYaml(proxies);
+  if (target === "qx") return renderQxProxies(proxies);
+  if (target === "sing-box") return renderSingBoxJson(proxies);
+  if (target === "v2ray") return base64Utf8(renderProxyUris(proxies));
+  if (target === "uri" || target === "shadowrocket") return renderProxyUris(proxies);
+  return JSON.stringify({ proxies }, null, 2);
+}
+
+function renderBuildTarget(proxies: ProxyNode[], options: BuildOptions) {
+  if (options.target === "mihomo" || options.target === "stash") return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
+  if (options.target === "surge") return renderSurgeProxies(proxies);
+  if (options.target === "surge-mac") return renderSurgeMacProxies(proxies);
+  if (options.target === "surfboard") return renderSurfboardProxies(proxies);
+  if (options.target === "loon") return renderLoonProxies(proxies);
+  if (options.target === "egern") return renderEgernYaml(proxies);
+  if (options.target === "shadowrocket") return renderProxyUris(proxies);
+  if (options.target === "qx") return renderQxProxies(proxies);
+  if (options.target === "sing-box") return renderSingBoxJson(proxies);
+  if (options.target === "v2ray") return base64Utf8(renderProxyUris(proxies));
+  if (options.target === "uri") return renderProxyUris(proxies);
+  if (options.target === "json") return JSON.stringify({ proxies }, null, 2);
+  return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
+}
+
+function selectResponseMetadata(options: InternalBuildOptions) {
+  const ordered = getSources(options);
+  for (const source of ordered) {
+    const metadata = options.responseMetadata.get(source.id);
+    if (metadata) return metadata;
+  }
+  return {} as SubscriptionResponseMetadata;
+}
+
+function metadataFromSource(source: SubscriptionSource): SubscriptionResponseMetadata {
+  return {
+    subscriptionUserinfo: stringSetting(source.meta?.subUserinfo) || stringSetting(source.meta?.subscriptionUserinfo),
+    profileWebPageUrl: stringSetting(source.meta?.profileWebPageUrl) || stringSetting(source.meta?.appUrl),
+    profileUpdateInterval: stringSetting(source.meta?.profileUpdateInterval),
+    contentDisposition: safeContentDisposition(stringSetting(source.meta?.contentDisposition)),
+    cacheStatus: "disabled",
+  };
+}
+
+function metadataFromResponse(response: Response, cacheStatus: SubscriptionResponseMetadata["cacheStatus"]): SubscriptionResponseMetadata {
+  return {
+    subscriptionUserinfo: response.headers.get("subscription-userinfo") || response.headers.get("x-sub-store-subscription-userinfo") || undefined,
+    profileWebPageUrl: response.headers.get("profile-web-page-url") || response.headers.get("x-sub-store-profile-web-page-url") || undefined,
+    profileUpdateInterval: response.headers.get("profile-update-interval") || response.headers.get("x-sub-store-profile-update-interval") || undefined,
+    contentDisposition: safeContentDisposition(response.headers.get("content-disposition") || response.headers.get("x-sub-store-content-disposition") || ""),
+    etag: response.headers.get("etag") || response.headers.get("x-sub-store-etag") || undefined,
+    lastModified: response.headers.get("last-modified") || response.headers.get("x-sub-store-last-modified") || undefined,
+    cacheStatus,
+  };
+}
+
+async function remoteCacheKey(url: string, userAgent: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${url}\n${userAgent}`));
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return new Request(`https://sub-store-cache.invalid/source/${hash}`);
+}
+
+async function safeCacheMatch(key: Request) {
+  try {
+    return await caches.default.match(key);
+  } catch {
+    return undefined;
+  }
+}
+
+async function safeCachePut(
+  key: Request,
+  content: string,
+  metadata: SubscriptionResponseMetadata,
+  ttl: number,
+) {
+  try {
+    const headers = new Headers({
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": `public, s-maxage=${ttl}`,
+    });
+    setInternalMetadataHeader(headers, "x-sub-store-subscription-userinfo", metadata.subscriptionUserinfo);
+    setInternalMetadataHeader(headers, "x-sub-store-profile-web-page-url", metadata.profileWebPageUrl);
+    setInternalMetadataHeader(headers, "x-sub-store-profile-update-interval", metadata.profileUpdateInterval);
+    setInternalMetadataHeader(headers, "x-sub-store-content-disposition", metadata.contentDisposition);
+    setInternalMetadataHeader(headers, "x-sub-store-etag", metadata.etag);
+    setInternalMetadataHeader(headers, "x-sub-store-last-modified", metadata.lastModified);
+    await caches.default.put(key, new Response(content, { headers }));
+  } catch {
+    // Cache API is optional and must not affect subscription generation.
+  }
+}
+
+function setInternalMetadataHeader(headers: Headers, name: string, value: string | undefined) {
+  if (value) headers.set(name, value.slice(0, 4096));
+}
+
+function safeContentDisposition(value: string) {
+  if (!value || /[\r\n]/.test(value)) return undefined;
+  const filename = value.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i)?.[1]?.trim();
+  if (!filename) return undefined;
+  const safe = filename.replace(/[^a-zA-Z0-9._()\-\u4e00-\u9fff ]/g, "_").slice(0, 120);
+  return safe ? `attachment; filename="${safe}"` : undefined;
 }
 
 function surgeType(proxy: ProxyNode) {

@@ -14,7 +14,7 @@ const BUILTIN_TEMPLATE_IDS = new Set([
   "loyalsoldier-blacklist",
   "ai-streaming-mihomo",
 ]);
-const SUPPORTED_TARGETS = new Set(["mihomo", "stash", "surge", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"]);
+const SUPPORTED_TARGETS = new Set(["mihomo", "stash", "surge", "surge-mac", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"]);
 const SUPPORTED_TEMPLATE_TARGETS = new Set(["mihomo", "stash"]);
 const SUPPORTED_RESOLVE_PROVIDERS = new Set(["Google", "Cloudflare", "Ali", "Tencent", "Custom"]);
 const ID_PATTERN = /^[a-z0-9_-]{1,64}$/;

@@ -7,8 +7,9 @@
       class="tabbar"
       size="22px"
     >
-      <nut-tabbar-item class="tabbar-item" to="/subs" icon="link" />
-      <nut-tabbar-item class="tabbar-item" to="/my" icon="setting" />
+      <nut-tabbar-item class="tabbar-item" to="/subs" icon="link" :tab-title="t('tabBar.sub')" />
+      <nut-tabbar-item class="tabbar-item" to="/tools" icon="more-x" :tab-title="t('tabBar.tools')" />
+      <nut-tabbar-item class="tabbar-item" to="/my" icon="setting" :tab-title="t('tabBar.my')" />
     </nut-tabbar>
   </div>
 </template>
@@ -17,9 +18,11 @@
   import { useWideScreenNarrowMode } from '@/hooks/useWideScreenNarrowMode';
   import { ref } from 'vue';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
+  import { useI18n } from 'vue-i18n';
 
   const route = useRoute();
-  const routeList = ['/subs', '/my'];
+  const { t } = useI18n();
+  const routeList = ['/subs', '/tools', '/my'];
   const activeTab = ref(routeList.indexOf(route.path));
   const { isWideScreenNarrowModeActive } = useWideScreenNarrowMode();
 

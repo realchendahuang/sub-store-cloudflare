@@ -25,11 +25,11 @@ Follow AGENTS.md and agent/SKILL.md in this repository. Deploy this Sub-Store Cl
 - Treat an empty collection `sourceIds` array as all enabled sources; use explicit ids for fixed membership.
 - Use `filterPresetIds` from `config/rule-presets.json` when the user asks for common filtering.
 - Use `acl4ssr-mihomo-no-emoji` when the user asks for rule groups without emoji.
-- Use D1 for sources, collections, templates, settings, and filters.
+- Use D1 for sources, collections, templates, settings, filters, scoped download grants, and the bounded recycle bin.
 - Do not add R2/KV/Queues/Durable Objects unless the codebase is changed for that storage model.
 - Do not use browser automation for Cloudflare setup unless the user explicitly asks for a visual walkthrough.
 - Treat upstream Sub-Store as a reference for retained source, collection, filter, template, preview, backup/restore, and download workflows only.
-- Do not add files, sync, share, archive, runtime-evaluated scripts, logs, queues, cron, or artifact features during installation or cleanup work. Build-time bundled Filter / Operator scripts are supported.
+- Do not add files, sync, public sharing, unbounded archives, runtime-evaluated scripts, logs, queues, cron, or artifact features during installation or cleanup work. Build-time bundled Filter / Operator scripts, scoped download grants, and the bounded recycle bin are supported.
 
 ## Execution Checklist
 

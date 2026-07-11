@@ -1,24 +1,27 @@
-# v0.3.0
+# v1.0.0
 
-Build-time JavaScript compatibility release for Sub-Store Cloudflare.
+Cloudflare-native upstream compatibility major release.
 
 ## Highlights
 
-- Adds JavaScript Filter / Operator modules bundled by Wrangler, without runtime `eval()` or `new Function()`.
-- Supports the upstream-style `filter(proxies, targetPlatform, context)` and `operator(proxies, targetPlatform, context)` contracts with `$arguments`, `$options`, and a bounded `ProxyUtils` subset.
-- Ships two Free-verified built-ins: TLS fingerprint and node-name regex filtering.
-- Adds script selection and metadata-driven arguments to the source and collection action editor.
-- Lets Agent/CLI users compile personal trusted scripts from gitignored local manifests and source directories.
-- Keeps browser-pasted, D1-stored, and remote script source out of the runtime boundary.
-- Adds Worker/D1 integration tests, generated-registry validation, a two-script-per-stage limit, strict output validation, and a no-node-growth rule.
-- Keeps the architecture on Workers Static Assets + Worker API + D1 + Worker Secrets.
+- Adds JSON5 input, Surge Mac output, and broader Surge/Loon/QX client-line compatibility including Snell, SSH, and H2 CONNECT.
+- Adds a Tools page for one-shot proxy/subscription conversion and rule conversion without saving content to D1.
+- Adds safe subscription metadata propagation and optional Workers Cache API caching with hashed keys, configurable TTL, forced refresh, conditional requests, and stale fallback.
+- Adds private scoped download grants with target restrictions, expiration, revocation, and one-time plaintext token display.
+- Adds a bounded 50-entry recycle bin for deleted configuration.
+- Adds configurable HTTPS node location and ASN lookup in preview.
+- Preserves the v0.3.0 build-time JavaScript Filter / Operator model.
+- Keeps the deployment on Workers Static Assets + Worker API + D1 + Worker Secrets. No KV, R2, Durable Objects, Queues, Cron, runtime script strings, general file hosting, artifact repository, or persistent request logs are required.
 
-## Install
+## Upgrade
 
-Use the Deploy to Cloudflare button in `README.md` for the built-in scripts, or run:
+Existing deployments keep their D1 database and Worker Secrets. Apply migrations and deploy normally:
 
 ```bash
-pnpm run install:cloudflare
+pnpm run migrate:remote
+pnpm run deploy:local
 ```
 
-For personal scripts, follow `docs/script-plugins.md` and redeploy through the Agent/CLI installer.
+Migration `0003_compatibility_resources.sql` adds scoped download grants and recycle-bin tables without replacing existing sources, collections, templates, or settings.
+
+See `docs/upstream-compatibility.md` for the tested compatibility matrix and explicit platform exclusions.

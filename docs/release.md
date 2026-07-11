@@ -16,7 +16,7 @@ Run the release checks locally, commit directly to `main`, tag the release, then
 
 ```bash
 git status --short
-pnpm run release:prepare -- v0.3.0
+pnpm run release:prepare -- v1.0.0
 pnpm run check:release
 pnpm run deploy:dry-run
 ```
@@ -42,15 +42,15 @@ Update:
 ## 3. Tag
 
 ```bash
-git tag -a v0.3.0 -m "v0.3.0"
+git tag -a v1.0.0 -m "v1.0.0"
 git push origin main --tags
 ```
 
 ## 4. Create GitHub Release
 
 ```bash
-gh release create v0.3.0 \
-  --title "v0.3.0" \
+gh release create v1.0.0 \
+  --title "v1.0.0" \
   --notes-file RELEASE_NOTES.md
 ```
 

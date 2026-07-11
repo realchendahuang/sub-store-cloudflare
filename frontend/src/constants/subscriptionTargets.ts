@@ -15,6 +15,7 @@ export type DownloadTarget =
   | 'mihomo'
   | 'stash'
   | 'surge'
+  | 'surge-mac'
   | 'surfboard'
   | 'loon'
   | 'egern'
@@ -37,6 +38,7 @@ export const DOWNLOAD_TARGET_OPTIONS: SubscriptionTargetOption<DownloadTarget>[]
   { value: 'mihomo', label: 'Mihomo', icon: clashmetaIcon },
   { value: 'stash', label: 'Stash', icon: stashIcon },
   { value: 'surge', label: 'Surge', icon: surgeIcon },
+  { value: 'surge-mac', label: 'Surge Mac', icon: surgeIcon },
   { value: 'loon', label: 'Loon', icon: loonIcon },
   { value: 'qx', label: 'Quantumult X', icon: quanxIcon },
   { value: 'shadowrocket', label: 'Shadowrocket', icon: shadowrocketIcon },

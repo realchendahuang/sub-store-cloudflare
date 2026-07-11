@@ -11,6 +11,9 @@ This roadmap is intentionally conservative. The project should stay easy to depl
 - Agent / CLI installer for seeded sources and collections.
 - Free-verified build-time JavaScript filters/operators, plus CLI-deployed personal scripts.
 - Local release gates instead of GitHub CI/CD.
+- JSON5 and broader client-line parsing, Surge Mac output, and one-shot proxy/rule conversion.
+- Allowlisted remote metadata propagation and optional Workers Cache API caching.
+- Scoped expiring download grants and a bounded D1 recycle bin.
 
 ## Near-Term Priorities
 
@@ -19,6 +22,7 @@ This roadmap is intentionally conservative. The project should stay easy to depl
 - Tighten docs for common Mihomo, sing-box, URI, and JSON workflows.
 - Improve import/export safety and validation messages.
 - Add screenshots or short GIFs after the UI stabilizes.
+- Expand tested parser/producer fixtures as upstream adds protocols and transport fields.
 
 ## Later, If Needed
 
@@ -32,8 +36,8 @@ This roadmap is intentionally conservative. The project should stay easy to depl
 - R2, KV, Durable Objects, Queues, Cron, or extra Cloudflare products.
 - File hosting.
 - Gist, GitLab, or third-party sync providers.
-- Sharing platform.
-- Archive/history system.
+- Public sharing platform. Scoped private download grants are implemented.
+- Unbounded archive/history system. A bounded recycle bin is implemented.
 - Runtime evaluation of browser-pasted or D1-stored JavaScript, and any script marketplace. Build-time bundled filters/operators are evaluated separately under the accepted Free-compatible design.
 - Log panel.
 - Full upstream Sub-Store API compatibility.

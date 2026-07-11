@@ -570,6 +570,16 @@ export function useCloudflareApi() {
         method: 'get',
       });
     },
+    convertProxies: (data: any): AxiosPromise<MyAxiosRes> => request({ url: '/api/proxy/parse', method: 'post', data }),
+    convertRules: (data: any): AxiosPromise<MyAxiosRes> => request({ url: '/api/rule/parse', method: 'post', data }),
+    getShares: (): AxiosPromise<MyAxiosRes> => request({ url: '/api/shares', method: 'get' }),
+    createShare: (data: any): AxiosPromise<MyAxiosRes> => request({ url: '/api/shares', method: 'post', data }),
+    updateShare: (id: string, data: any): AxiosPromise<MyAxiosRes> => request({ url: `/api/shares/${encodeURIComponent(id)}`, method: 'patch', data }),
+    deleteShare: (id: string): AxiosPromise<MyAxiosRes> => request({ url: `/api/shares/${encodeURIComponent(id)}`, method: 'delete' }),
+    getRecycleBin: (): AxiosPromise<MyAxiosRes> => request({ url: '/api/recycle-bin', method: 'get' }),
+    restoreRecycleEntry: (id: string): AxiosPromise<MyAxiosRes> => request({ url: `/api/recycle-bin/${encodeURIComponent(id)}/restore`, method: 'post' }),
+    deleteRecycleEntry: (id: string): AxiosPromise<MyAxiosRes> => request({ url: `/api/recycle-bin/${encodeURIComponent(id)}`, method: 'delete' }),
+    getNodeInfo: (data: any): AxiosPromise<MyAxiosRes> => request({ url: '/api/utils/node-info', method: 'post', data }),
     createTemplate: (data: any): AxiosPromise<MyAxiosRes> => {
       return request({
         url: '/api/templates',

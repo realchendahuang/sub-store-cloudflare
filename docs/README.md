@@ -1,6 +1,7 @@
 # 文档索引
 
 - [architecture.md](architecture.md)：Worker + D1 的简化架构、数据模型和输出链路。
+- [upstream-compatibility.md](upstream-compatibility.md)：v1.0.0 对原版 Sub-Store 的真实支持矩阵和明确排除项。
 - [product-scope.md](product-scope.md)：项目保留什么、不保留什么，以及如何判断新功能是否属于核心范围。
 - [script-plugins.md](script-plugins.md)：构建时 JavaScript Filter / Operator、个人脚本和兼容边界。
 - [superpowers/specs/2026-07-11-build-time-script-compatibility-design.md](superpowers/specs/2026-07-11-build-time-script-compatibility-design.md)：构建时 JavaScript 兼容的架构与免费版性能设计。

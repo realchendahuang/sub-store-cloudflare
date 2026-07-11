@@ -48,6 +48,7 @@ export default {
     },
     pagesTitle: {
       sub: "订阅管理",
+      tools: "兼容工具",
       my: "设置",
       subEditor: "编辑订阅",
       sourceCreate: "新建订阅源",
@@ -60,7 +61,45 @@ export default {
   },
   tabBar: {
     sub: "订阅",
+    tools: "工具",
     my: "设置"
+  },
+  toolsPage: {
+    converter: {
+      title: "一次性转换",
+      desc: "粘贴节点、订阅或规则，不保存到 D1，直接转换为目标格式。",
+      proxy: "节点/订阅",
+      rule: "规则",
+      input: "粘贴待转换内容",
+      output: "转换结果",
+      run: "开始转换",
+      copy: "复制结果"
+    },
+    shares: {
+      title: "独立分享链接",
+      desc: "为单个订阅源或组合创建可撤销、可过期、可限制格式的下载链接。Token 只在创建时显示。",
+      resourceType: "资源类型",
+      resourceId: "资源 ID",
+      target: "限制输出格式，可留空",
+      expires: "有效小时数，0 表示不过期",
+      create: "创建链接",
+      empty: "还没有独立分享链接",
+      disable: "停用",
+      enable: "启用"
+    },
+    recycle: {
+      title: "回收站",
+      desc: "最多保留 50 条已删除配置。恢复不会覆盖同名资源。",
+      empty: "回收站为空",
+      restore: "恢复",
+      purge: "彻底删除"
+    },
+    notify: {
+      converted: "转换完成",
+      copied: "已复制",
+      shareCreated: "分享链接已创建",
+      failed: "操作失败\n{e}"
+    }
   },
   notFoundPage: {
     title: "啊哦～ URL 错误！",
@@ -695,6 +734,9 @@ export default {
       defaultTimeout: "请求超时，单位毫秒",
       backendRequestConcurrency: "远程订阅并发数",
       backendRequestConcurrencyWaitTime: "并发请求间隔，单位毫秒",
+      remoteCacheTtl: "远程订阅边缘缓存秒数，0 表示关闭",
+      remoteCacheStaleOnError: "远程订阅失败时允许使用最近的边缘缓存",
+      nodeInfoApiUrl: "节点信息 HTTPS API，必须包含 {ip}",
       summary: "当前远程订阅拉取并发 {concurrency}，超时 {timeout}ms。"
     },
     btn: {

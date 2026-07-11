@@ -6,6 +6,29 @@ This project follows semantic versioning where practical.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-11
+
+### Added
+
+- Added JSON5 subscription input, a distinct Surge Mac output target, and structured Snell, SSH, and HTTP/2 CONNECT client-line compatibility.
+- Added authenticated one-shot proxy/subscription conversion and Mihomo, Surge, Loon, and Quantumult X rule conversion APIs plus an admin Tools page.
+- Added allowlisted remote subscription metadata propagation, hashed Cache API keys, configurable edge-cache TTL, forced refresh, conditional requests, and stale-on-error fallback.
+- Added scoped download grants with one-time plaintext tokens, D1-stored SHA-256 hashes, target restrictions, expiration, revocation, and deployment-token compatibility.
+- Added a bounded 50-entry recycle bin for deleted sources, collections, custom templates, and scoped download grants.
+- Added configurable HTTPS node IP, location, organization, and ASN lookup from the preview node panel.
+- Added an upstream compatibility matrix and a D1 migration for the new compatibility resources.
+
+### Changed
+
+- Repositioned the project as a tested Cloudflare-native compatibility edition while keeping Workers Static Assets + Worker API + D1 + Worker Secrets.
+- Updated product and Agent boundaries to preserve scoped private links and the bounded recycle bin while continuing to reject public sharing, unbounded archives, runtime scripts, files, artifacts, queues, cron, and persistent logs.
+- Download responses now propagate safe subscription metadata and expose a non-sensitive edge-cache status header.
+
+### Verification
+
+- Added rule conversion, JSON5, Surge Mac, response metadata, scoped authorization, and recycle/restore tests.
+- Kept the full release gate, dry-run bundle measurement, startup profiling, and deployed smoke verification as release requirements.
+
 ## [0.3.0] - 2026-07-11
 
 ### Added

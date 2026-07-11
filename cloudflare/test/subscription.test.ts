@@ -4,7 +4,7 @@ import {
   MAX_REMOTE_SOURCE_URLS,
 } from "../src/lib/limits";
 import { readResponseText } from "../src/lib/read";
-import { buildSubscription, normalizeTargetAlias, validateSubscriptionContent } from "../src/lib/subscription";
+import { buildSubscription, buildSubscriptionResult, convertSubscriptionContent, normalizeTargetAlias, validateSubscriptionContent } from "../src/lib/subscription";
 
 describe("subscription parsing and limits", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -12,7 +12,7 @@ describe("subscription parsing and limits", () => {
   it("normalizes target aliases and parses URI subscriptions", () => {
     expect(normalizeTargetAlias("clash-meta")).toBe("mihomo");
     expect(normalizeTargetAlias("singbox")).toBe("sing-box");
-    expect(normalizeTargetAlias("surge-mac")).toBeUndefined();
+    expect(normalizeTargetAlias("surge-mac")).toBe("surge-mac");
     const nodes = validateSubscriptionContent(
       "vless://00000000-0000-4000-8000-000000000002@example.com:443?security=tls#Parsed%20Node",
     );
@@ -21,7 +21,7 @@ describe("subscription parsing and limits", () => {
   });
 
   it("renders every advertised target", async () => {
-    const targets = ["mihomo", "stash", "surge", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"] as const;
+    const targets = ["mihomo", "stash", "surge", "surge-mac", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"] as const;
     for (const target of targets) {
       const output = await buildSubscription({
         source: {
@@ -37,6 +37,60 @@ describe("subscription parsing and limits", () => {
       });
       expect(output.length, `${target} output`).toBeGreaterThan(0);
     }
+  });
+
+  it("parses JSON5 and converts Surge Mac-only node types", async () => {
+    const json5 = `{
+      // compatible comment
+      proxies: [
+        { name: 'Snell Node', type: 'snell', server: 'example.com', port: 443, psk: 'secret', },
+      ],
+    }`;
+    expect(validateSubscriptionContent(json5)).toHaveLength(1);
+    const converted = await convertSubscriptionContent({ content: json5, target: "surge-mac" });
+    expect(converted.content).toContain("Snell Node=snell,example.com,443");
+    expect(converted.emitted).toBe(1);
+  });
+
+  it("captures allowlisted remote response metadata", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      "trojan://password@example.com:443#Remote%20Node",
+      {
+        headers: {
+          "subscription-userinfo": "upload=1; download=2; total=10",
+          "profile-web-page-url": "https://example.com/dashboard",
+          "profile-update-interval": "12",
+        },
+      },
+    ));
+    const result = await buildSubscriptionResult({
+      source: { id: "remote-meta", name: "Remote Meta", type: "remote", url: "https://example.com/sub", content: "" },
+      sources: [],
+      requestUrl: new URL("https://example.com/download/source/remote-meta/json"),
+      target: "json",
+      settings: { remoteCacheTtl: 0 },
+    });
+    expect(result.metadata.subscriptionUserinfo).toContain("total=10");
+    expect(result.metadata.profileWebPageUrl).toBe("https://example.com/dashboard");
+    expect(result.metadata.profileUpdateInterval).toBe("12");
+  });
+
+  it("uses a hashed Cache API key for repeat remote fetches", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      "trojan://password@cache.example.com:443#Cached%20Node",
+      { headers: { etag: '"cache-v1"' } },
+    ));
+    const options = {
+      source: { id: "remote-cache", name: "Remote Cache", type: "remote" as const, url: "https://private.example/sub?token=secret-value", content: "" },
+      sources: [],
+      requestUrl: new URL("https://example.com/download/source/remote-cache/json"),
+      target: "json" as const,
+      settings: { remoteCacheTtl: 300 },
+    };
+    await buildSubscriptionResult(options);
+    const cached = await buildSubscriptionResult(options);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(cached.metadata.cacheStatus).toBe("hit");
   });
 
   it("renders a JSON target from a local source", async () => {

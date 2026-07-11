@@ -21,6 +21,19 @@
           <nut-textarea :model-value="JSON.stringify(props.nodeInfo, null, 2)" :rows="15" readonly/>
         </div>
       </nut-tabpane>
+      <nut-tabpane :title="$t('comparePage.nodeInfo.ipApi.title')">
+        <div v-if="ipLoading" class="ip-api-state ip-api-loading">{{ $t('comparePage.nodeInfo.ipApi.loading') }}</div>
+        <div v-else-if="ipError" class="ip-api-state">
+          <span class="state-title">{{ $t('comparePage.nodeInfo.ipApi.loadFailed') }}</span>
+          <nut-button class="ip-api-retry-btn" plain type="primary" size="small" @click="loadIpInfo">{{ $t('comparePage.nodeInfo.ipApi.retry') }}</nut-button>
+        </div>
+        <ul v-else class="info-ul">
+          <li v-for="(value, key) in ipInfo" :key="key">
+            <span class="info-key">{{ key }}</span>
+            <span class="info-value"> : {{ typeof value === 'object' ? JSON.stringify(value) : value }}</span>
+          </li>
+        </ul>
+      </nut-tabpane>
     </nut-tabs>
   </div>
   <!-- lock-scroll -->
@@ -32,7 +45,8 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
+  import { useCloudflareApi } from '@/api/app';
 
   const emit = defineEmits(['close']);
   const props = defineProps<{
@@ -41,6 +55,23 @@
 
   const overlayVisible = ref(true);
   const currentTab = ref(0);
+  const ipLoading = ref(false);
+  const ipError = ref(false);
+  const ipInfo = ref<Record<string, unknown>>({});
+  const api = useCloudflareApi();
+
+  const loadIpInfo = async () => {
+    ipLoading.value = true;
+    ipError.value = false;
+    try {
+      const response = await api.getNodeInfo({ server: props.nodeInfo.server });
+      ipInfo.value = (response?.data as any)?.data || {};
+    } catch {
+      ipError.value = true;
+    } finally {
+      ipLoading.value = false;
+    }
+  };
 
   const displayNodeInfo = computed(() => {
     const result = {};
@@ -61,6 +92,8 @@
   const closePanel = () => {
     emit('close');
   };
+
+  onMounted(loadIpInfo);
 </script>
 
 <style lang="scss" scoped>

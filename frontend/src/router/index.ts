@@ -102,6 +102,15 @@ const router = createRouter({
           },
         },
         {
+          path: '/tools',
+          component: () => import('@/views/Tools.vue'),
+          meta: {
+            title: 'tools',
+            needTabBar: true,
+            needNavBack: false,
+          },
+        },
+        {
           path: '/preview',
           component: () => import('@/views/Preview.vue'),
           meta: {
