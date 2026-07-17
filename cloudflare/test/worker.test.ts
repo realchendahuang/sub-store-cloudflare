@@ -279,7 +279,7 @@ describe("Worker and D1 integration", () => {
         }],
         collections: [{
           id: "test-collection",
-          name: "Test Collection",
+          name: "测试集合",
           sourceIds: ["test-local"],
           templateId: "test-template",
           enabled: true,
@@ -300,6 +300,16 @@ describe("Worker and D1 integration", () => {
     expect(download.status).toBe(200);
     expect(download.headers.get("content-type")).toContain("text/yaml");
     expect(await download.text()).toContain("Test Node");
+
+    const shadowrocketLinkResponse = await workerRequest(
+      "/api/link/collection/test-collection?target=shadowrocket",
+    );
+    const shadowrocketLink = String(getPath(await jsonObject(shadowrocketLinkResponse), "data", "url"));
+    const [encodedUrl, encodedRemark] = shadowrocketLink.split("#");
+    expect(atob(encodedUrl.slice("sub://".length))).toBe(
+      `https://downloads.example.com/download/collection/test-collection/shadowrocket?token=${DOWNLOAD_TOKEN}`,
+    );
+    expect(decodeURIComponent(encodedRemark)).toBe("测试集合");
   });
 
   it("rejects oversized API bodies", async () => {
