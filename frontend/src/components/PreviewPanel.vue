@@ -140,7 +140,7 @@
   const targetOpen = async (path: PlatformPath) => {
     const pendingWindow = window.open('about:blank', '_blank');
     const realUrl = await getRealUrl(path);
-    const nextUrl = appearanceSetting.value.displayPreviewInWebPage && path !== 'shadowrocket'
+    const nextUrl = appearanceSetting.value.displayPreviewInWebPage
         ? buildUrlWithQuery('/preview', {
             url: realUrl,
             name: displayName || name,
