@@ -4,7 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { parse as parseYaml } from "yaml";
 import { failed, requireAdmin, success } from "../lib/http";
 import { BUILTIN_TEMPLATE_IDS } from "../lib/defaults";
-import { MAX_API_BODY_BYTES, MAX_FLOW_RESPONSE_BYTES } from "../lib/limits";
+import { MAX_API_BODY_BYTES, MAX_FLOW_RESPONSE_BYTES, PayloadTooLargeError } from "../lib/limits";
 import { readResponseText } from "../lib/read";
 import { convertRules, type RuleTarget } from "../lib/rules";
 import { listScriptMetadata, validateScriptActions } from "../lib/scripts";
@@ -12,12 +12,14 @@ import {
   archiveAndDeleteResource,
   createDownloadGrant,
   deleteRecycleBinEntry,
+  deleteResourceGrantsStatement,
   getDownloadGrant,
   getDownloadGrantSnapshot,
   getRecycleBinEntry,
   listDownloadGrants,
   listRecycleBin,
-  restoreDownloadGrantSnapshot,
+  recycleBinDeleteStatement,
+  restoreDownloadGrantStatement,
   updateDownloadGrant,
 } from "../lib/compatibility-resources";
 import {
@@ -29,10 +31,16 @@ import {
   getTemplate,
   importStorage,
   listCollections,
+  listSourceNames,
   listSources,
   listTemplates,
+  normalizeMihomoTemplateConfig,
+  prepareCollectionUpsert,
+  prepareSourceUpsert,
+  prepareTemplateUpsert,
   sortCollections,
   sortSources,
+  StorageImportError,
   updateSettings,
   upsertCollection,
   upsertSource,
@@ -55,6 +63,8 @@ type JsonMap = Record<string, unknown>;
 type ApiContext = Context<{ Bindings: SubStoreEnv }>;
 
 const FRONTEND_VERSION = "1.1.0";
+const MAX_REQUEST_CONCURRENCY = 6;
+const MAX_SHARE_LIFETIME_MS = 365 * 24 * 60 * 60 * 1000;
 apiRoutes.use("*", async (c, next) => {
   const invalid = await requireAdmin(c);
   if (invalid) return invalid;
@@ -100,6 +110,9 @@ apiRoutes.post("/rule/parse", async (c) => {
 apiRoutes.get("/settings", async (c) => success(c, mergeSettings(defaultSettings(c.env), await getSettings(c.env))));
 apiRoutes.patch("/settings", async (c) => {
   const input: JsonMap = await c.req.json<JsonMap>().catch(() => ({}));
+  const concurrency = normalizeRequestConcurrency(input.backendRequestConcurrency);
+  if (concurrency === null) return failed(c, `Setting backendRequestConcurrency must be a number between 1 and ${MAX_REQUEST_CONCURRENCY}`, 400);
+  if (concurrency !== undefined) input.backendRequestConcurrency = concurrency;
   const settings = await updateSettings(c.env, input);
   return success(c, mergeSettings(defaultSettings(c.env), settings));
 });
@@ -114,7 +127,12 @@ apiRoutes.get("/storage", async (c) => {
 });
 apiRoutes.post("/storage", async (c) => {
   const input = await parseJsonOrText(c);
-  return success(c, await importStorage(c.env, input));
+  try {
+    return success(c, await importStorage(c.env, input));
+  } catch (error) {
+    if (error instanceof StorageImportError) return failed(c, error.message, 400);
+    throw error;
+  }
 });
 
 apiRoutes.get("/sources", async (c) => success(c, (await listSources(c.env)).map(toApiSource)));
@@ -163,7 +181,10 @@ apiRoutes.delete("/sources/:name", async (c) => {
     "source",
     existing.id,
     existing as unknown as JsonMap,
-    c.env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(existing.id),
+    [
+      c.env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(existing.id),
+      deleteResourceGrantsStatement(c.env, "source", existing.id),
+    ],
   );
   return success(c, { deleted: true, references: [] });
 });
@@ -212,7 +233,10 @@ apiRoutes.delete("/collections/:name", async (c) => {
     "collection",
     existing.id,
     existing as unknown as JsonMap,
-    c.env.DB.prepare("DELETE FROM collections WHERE id = ?").bind(existing.id),
+    [
+      c.env.DB.prepare("DELETE FROM collections WHERE id = ?").bind(existing.id),
+      deleteResourceGrantsStatement(c.env, "collection", existing.id),
+    ],
   );
   return success(c, { deleted: true });
 });
@@ -224,7 +248,7 @@ apiRoutes.post("/templates", async (c) => {
     if (!stringValue(input.name || input.id)) return failed(c, "Template name is required");
     return success(c, toApiTemplate(await upsertTemplate(c.env, fromApiTemplate(input))));
   } catch (error) {
-    return failed(c, error instanceof Error ? error.message : String(error), 400);
+    return failed(c, error instanceof Error ? error.message : String(error), errorStatus(error, 400));
   }
 });
 apiRoutes.get("/templates/:name", async (c) => {
@@ -238,7 +262,7 @@ apiRoutes.patch("/templates/:name", async (c) => {
     if (!existing) return failed(c, "Template not found", 404);
     return success(c, toApiTemplate(await upsertTemplate(c.env, { ...fromApiTemplate(await parseJsonOrText(c) as JsonMap), id: existing.id })));
   } catch (error) {
-    return failed(c, error instanceof Error ? error.message : String(error), 400);
+    return failed(c, error instanceof Error ? error.message : String(error), errorStatus(error, 400));
   }
 });
 apiRoutes.delete("/templates/:name", async (c) => {
@@ -273,7 +297,7 @@ apiRoutes.post("/shares", async (c) => {
   if (input.target && !target) return failed(c, "Unsupported target", 400);
   const expiresIn = numberValue(input.expiresIn, 0, 0, 365 * 24 * 60 * 60);
   const expiresAt = input.expiresAt
-    ? numberValue(input.expiresAt, 0, Date.now() + 60_000, Date.now() + 365 * 24 * 60 * 60 * 1000)
+    ? numberValue(input.expiresAt, 0, Date.now() + 60_000, Date.now() + MAX_SHARE_LIFETIME_MS)
     : expiresIn > 0 ? Date.now() + expiresIn * 1000 : undefined;
   const created = await createDownloadGrant(c.env, { resourceType, resourceId, target, expiresAt });
   const path = ["/download", resourceType, encodeURIComponent(resourceId), target].filter(Boolean).join("/");
@@ -283,9 +307,17 @@ apiRoutes.post("/shares", async (c) => {
 });
 apiRoutes.patch("/shares/:id", async (c) => {
   const input: JsonMap = await c.req.json<JsonMap>().catch(() => ({}));
+  // null clears the expiry; anything else must be a future timestamp within the same limit POST allows.
+  let expiresAt: number | null | undefined;
+  if (input.expiresAt === null) {
+    expiresAt = null;
+  } else if (input.expiresAt !== undefined) {
+    expiresAt = parseShareExpiry(input.expiresAt);
+    if (expiresAt === undefined) return failed(c, "Share expiresAt must be null or a future timestamp within 365 days", 400);
+  }
   const updated = await updateDownloadGrant(c.env, c.req.param("id"), {
     enabled: typeof input.enabled === "boolean" ? input.enabled : undefined,
-    expiresAt: input.expiresAt === null ? null : input.expiresAt ? Number(input.expiresAt) : undefined,
+    expiresAt,
   });
   return updated ? success(c, updated) : failed(c, "Share not found", 404);
 });
@@ -313,22 +345,25 @@ apiRoutes.post("/recycle-bin/:id/restore", async (c) => {
   const entry = await getRecycleBinEntry(c.env, c.req.param("id"));
   if (!entry) return failed(c, "Recycle entry not found", 404);
   try {
+    // The upsert and the recycle entry removal run in one D1 batch so a failure cannot lose or duplicate the entry.
+    const createdAt = Number(entry.snapshot.createdAt) || undefined;
+    let restore: D1PreparedStatement;
     if (entry.resourceType === "source") {
       if (await getSource(c.env, entry.resourceId)) return failed(c, "Source id already exists", 409);
-      await upsertSource(c.env, entry.snapshot as Partial<SourceRecord>);
+      restore = (await prepareSourceUpsert(c.env, entry.snapshot as Partial<SourceRecord>, { createdAt })).statement;
     } else if (entry.resourceType === "collection") {
       if (await getCollection(c.env, entry.resourceId)) return failed(c, "Collection id already exists", 409);
       const validationError = await validateCollection(c.env, entry.snapshot as Partial<CollectionRecord>);
       if (validationError) return failed(c, validationError, 409);
-      await upsertCollection(c.env, entry.snapshot as Partial<CollectionRecord>);
+      restore = (await prepareCollectionUpsert(c.env, entry.snapshot as Partial<CollectionRecord>, { createdAt })).statement;
     } else if (entry.resourceType === "template") {
       if (await getTemplate(c.env, entry.resourceId)) return failed(c, "Template id already exists", 409);
-      await upsertTemplate(c.env, entry.snapshot as Partial<TemplateRecord>);
+      restore = (await prepareTemplateUpsert(c.env, entry.snapshot as Partial<TemplateRecord>, { createdAt })).statement;
     } else {
       if (await getDownloadGrant(c.env, entry.resourceId)) return failed(c, "Share id already exists", 409);
-      await restoreDownloadGrantSnapshot(c.env, entry.snapshot);
+      restore = restoreDownloadGrantStatement(c.env, entry.snapshot);
     }
-    await deleteRecycleBinEntry(c.env, entry.id);
+    await c.env.DB.batch([restore, recycleBinDeleteStatement(c.env, entry.id)]);
     return success(c, { restored: true, resourceType: entry.resourceType, resourceId: entry.resourceId });
   } catch (error) {
     return failed(c, error instanceof Error ? error.message : String(error), 409);
@@ -378,7 +413,8 @@ apiRoutes.post("/preview/source", async (c) => {
 apiRoutes.post("/preview/collection", async (c) => {
   const input = await c.req.json<JsonMap>();
   try {
-    return success(c, await previewSubscription({ collection: toSubscriptionCollection(input), sources: await getSubscriptionSources(c.env), settings: await getSettings(c.env) }));
+    const collection = toSubscriptionCollection(input);
+    return success(c, await previewSubscription({ collection, sources: await getSubscriptionSources(c.env, collection.sourceIds), settings: await getSettings(c.env) }));
   } catch (error) {
     return failed(c, error instanceof Error ? error.message : String(error), 400);
   }
@@ -448,7 +484,7 @@ function defaultSettings(env: SubStoreEnv) {
     defaultFlowUserAgent: "clash.meta/v1.19.24",
     defaultTimeout: "30000",
     backendRequestConcurrency: "3",
-    backendRequestConcurrencyWaitTime: "100",
+    backendRequestConcurrencyWaitTime: "0",
     remoteCacheTtl: "300",
     remoteCacheStaleOnError: true,
     nodeInfoApiUrl: "https://ipwho.is/{ip}",
@@ -644,7 +680,7 @@ async function validateCollection(env: SubStoreEnv, input: Partial<CollectionRec
   const scriptError = validateScriptActions(input.filters || []);
   if (scriptError) return scriptError;
   const sourceIds = input.sourceIds || [];
-  const sourceIdSet = new Set((await listSources(env)).map((source) => source.id));
+  const sourceIdSet = new Set((await listSourceNames(env)).map((source) => source.id));
   const missingSources = sourceIds.filter((id) => !sourceIdSet.has(id));
   if (missingSources.length > 0) return `Collection references missing sources: ${missingSources.join(", ")}`;
 
@@ -716,21 +752,6 @@ function parseTemplateConfig(input: unknown) {
     throw new Error("Template config must be valid JSON or YAML");
   }
   throw new Error("Template config must be an object");
-}
-
-function normalizeMihomoTemplateConfig(input: JsonMap) {
-  const output: JsonMap = { ...input };
-  copyAlias(output, "mixed-port", "mixedPort");
-  copyAlias(output, "allow-lan", "allowLan");
-  copyAlias(output, "log-level", "logLevel");
-  copyAlias(output, "proxy-groups", "proxyGroups");
-  copyAlias(output, "rule-providers", "ruleProviders");
-  return output;
-}
-
-function copyAlias(input: JsonMap, from: string, to: string) {
-  if (input[to] === undefined && input[from] !== undefined) input[to] = input[from];
-  delete input[from];
 }
 
 type FlowRequest = {
@@ -835,11 +856,6 @@ function textField(input: string, key: string) {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
-function keepMeta(input: JsonMap, excluded: string[]) {
-  const excludedSet = new Set(excluded);
-  return Object.fromEntries(Object.entries(input).filter(([key]) => !excludedSet.has(key)));
-}
-
 function objectValue(input: unknown): JsonMap {
   return input && typeof input === "object" && !Array.isArray(input) ? (input as JsonMap) : {};
 }
@@ -881,10 +897,6 @@ function stringArray(input: unknown): string[] {
   return Array.isArray(input) ? input.map(String).filter(Boolean) : [];
 }
 
-function arrayValue(input: unknown): unknown[] {
-  return Array.isArray(input) ? input : [];
-}
-
 function stringValue(input: unknown): string {
   return typeof input === "string" ? input : "";
 }
@@ -893,4 +905,26 @@ function numberValue(input: unknown, fallback: number, min: number, max: number)
   const number = Number(input);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(Math.max(Math.trunc(number), min), max);
+}
+
+// Accepts a numeric timestamp (or numeric string) that is still in the future and within the share lifetime limit.
+function parseShareExpiry(input: unknown) {
+  if (typeof input !== "number" && (typeof input !== "string" || !input.trim())) return undefined;
+  const value = Number(input);
+  const now = Date.now();
+  if (!Number.isFinite(value) || value <= now || value > now + MAX_SHARE_LIFETIME_MS) return undefined;
+  return Math.trunc(value);
+}
+
+// undefined: not provided (or blank, meaning "use the default"); null: invalid; otherwise a clamped integer string.
+function normalizeRequestConcurrency(input: unknown) {
+  if (input === undefined || input === "") return undefined;
+  if (typeof input !== "number" && typeof input !== "string") return null;
+  const value = Number(input);
+  if (!Number.isFinite(value)) return null;
+  return String(Math.min(Math.max(Math.trunc(value), 1), MAX_REQUEST_CONCURRENCY));
+}
+
+function errorStatus(error: unknown, fallback: 400) {
+  return error instanceof PayloadTooLargeError ? 413 : fallback;
 }

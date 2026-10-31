@@ -89,11 +89,12 @@ export async function updateDownloadGrant(
   return getDownloadGrant(env, id);
 }
 
-export async function deleteDownloadGrant(env: SubStoreEnv, id: string) {
-  await env.DB.prepare("DELETE FROM download_grants WHERE id = ?").bind(id).run();
+// Share links must not outlive their resource, or recreating the same id would revive them.
+export function deleteResourceGrantsStatement(env: SubStoreEnv, resourceType: "source" | "collection", resourceId: string) {
+  return env.DB.prepare("DELETE FROM download_grants WHERE resource_type = ? AND resource_id = ?").bind(resourceType, resourceId);
 }
 
-export async function restoreDownloadGrantSnapshot(env: SubStoreEnv, snapshot: Record<string, unknown>) {
+export function restoreDownloadGrantStatement(env: SubStoreEnv, snapshot: Record<string, unknown>) {
   const id = stringValue(snapshot.id);
   const tokenHash = stringValue(snapshot.tokenHash);
   const resourceType = snapshot.resourceType === "collection" ? "collection" : "source";
@@ -101,7 +102,7 @@ export async function restoreDownloadGrantSnapshot(env: SubStoreEnv, snapshot: R
   if (!id || !tokenHash || !resourceId) throw new Error("Share snapshot is invalid");
   const target = normalizeTargetAlias(snapshot.target) || undefined;
   const createdAt = numberValue(snapshot.createdAt) || Date.now();
-  await env.DB.prepare(
+  return env.DB.prepare(
     `INSERT INTO download_grants
      (id, token_hash, resource_type, resource_id, target, expires_at, enabled, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -115,8 +116,7 @@ export async function restoreDownloadGrantSnapshot(env: SubStoreEnv, snapshot: R
     snapshot.enabled === false ? 0 : 1,
     createdAt,
     Date.now(),
-  ).run();
-  return getDownloadGrant(env, id);
+  );
 }
 
 export async function authorizeScopedDownload(
@@ -140,33 +140,12 @@ export async function authorizeScopedDownload(
   return !restrictedTarget || restrictedTarget === target;
 }
 
-export async function archiveResource(
-  env: SubStoreEnv,
-  resourceType: RecycleBinRecord["resourceType"],
-  resourceId: string,
-  snapshot: Record<string, unknown>,
-) {
-  const deletedAt = Date.now();
-  const id = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO recycle_bin (id, resource_type, resource_id, snapshot_json, deleted_at) VALUES (?, ?, ?, ?, ?)",
-    ).bind(id, resourceType, resourceId, JSON.stringify(snapshot), deletedAt),
-    env.DB.prepare(
-      `DELETE FROM recycle_bin WHERE id IN (
-         SELECT id FROM recycle_bin ORDER BY deleted_at DESC LIMIT -1 OFFSET ?
-       )`,
-    ).bind(MAX_RECYCLE_ENTRIES),
-  ]);
-  return { id, resourceType, resourceId, deletedAt };
-}
-
 export async function archiveAndDeleteResource(
   env: SubStoreEnv,
   resourceType: RecycleBinRecord["resourceType"],
   resourceId: string,
   snapshot: Record<string, unknown>,
-  deleteStatement: D1PreparedStatement,
+  deleteStatements: D1PreparedStatement | D1PreparedStatement[],
 ) {
   const deletedAt = Date.now();
   const id = crypto.randomUUID();
@@ -174,7 +153,7 @@ export async function archiveAndDeleteResource(
     env.DB.prepare(
       "INSERT INTO recycle_bin (id, resource_type, resource_id, snapshot_json, deleted_at) VALUES (?, ?, ?, ?, ?)",
     ).bind(id, resourceType, resourceId, JSON.stringify(snapshot), deletedAt),
-    deleteStatement,
+    ...(Array.isArray(deleteStatements) ? deleteStatements : [deleteStatements]),
     env.DB.prepare(
       `DELETE FROM recycle_bin WHERE id IN (
          SELECT id FROM recycle_bin ORDER BY deleted_at DESC LIMIT -1 OFFSET ?
@@ -199,7 +178,11 @@ export async function getRecycleBinEntry(env: SubStoreEnv, id: string) {
 }
 
 export async function deleteRecycleBinEntry(env: SubStoreEnv, id: string) {
-  await env.DB.prepare("DELETE FROM recycle_bin WHERE id = ?").bind(id).run();
+  await recycleBinDeleteStatement(env, id).run();
+}
+
+export function recycleBinDeleteStatement(env: SubStoreEnv, id: string) {
+  return env.DB.prepare("DELETE FROM recycle_bin WHERE id = ?").bind(id);
 }
 
 function grantFromRow(row: GrantRow): DownloadGrantRecord {

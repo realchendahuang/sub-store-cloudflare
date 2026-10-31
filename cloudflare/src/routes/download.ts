@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { failed, isTokenValid } from "../lib/http";
 import { authorizeScopedDownload } from "../lib/compatibility-resources";
 import { buildSubscriptionResult, getTargetContentType, normalizeTarget, normalizeTargetAlias } from "../lib/subscription";
-import { getRoutingTemplate, getSettings, getSource, getSubscriptionCollection, getSubscriptionSources } from "../lib/store";
+import { getRoutingTemplate, getSettings, getSource, getSubscriptionCollection, getSubscriptionSources, sourceToSubscription } from "../lib/store";
 import type { SubscriptionCollection, SubscriptionSource, SubscriptionTarget } from "../types";
 
 export const downloadRoutes = new Hono<{ Bindings: SubStoreEnv }>();
@@ -13,43 +13,36 @@ type DownloadContext = Context<{ Bindings: SubStoreEnv }>;
 downloadRoutes.get("/download/collection/:name/:target?/:token?", async (c) => {
   const target = getDownloadTarget(c);
   if (!target) return failed(c, "Unsupported target", 400);
-  const invalidToken = await rejectInvalidDownloadToken(c, "collection", c.req.param("name"), target);
-  if (invalidToken) return invalidToken;
+  const tokenKind = await authenticateDownloadToken(c, "collection", c.req.param("name"), target);
+  if (!tokenKind) return failed(c, "Download token is invalid", 403);
 
   const collection = await getSubscriptionCollection(c.env, c.req.param("name"));
   if (!collection) return failed(c, "Collection not found", 404);
 
   return renderDownload(c, {
     collection,
-    sources: await getSubscriptionSources(c.env),
+    sources: await getSubscriptionSources(c.env, collection.sourceIds),
     target,
     templateId: collection.templateId,
+    allowOverrides: tokenKind === "main",
   });
 });
 
 downloadRoutes.get("/download/source/:name/:target?/:token?", async (c) => {
   const target = getDownloadTarget(c);
   if (!target) return failed(c, "Unsupported target", 400);
-  const invalidToken = await rejectInvalidDownloadToken(c, "source", c.req.param("name"), target);
-  if (invalidToken) return invalidToken;
+  const tokenKind = await authenticateDownloadToken(c, "source", c.req.param("name"), target);
+  if (!tokenKind) return failed(c, "Download token is invalid", 403);
 
   const source = await getSource(c.env, c.req.param("name"));
   if (!source || !source.enabled) return failed(c, "Subscription not found", 404);
-  const subscriptionSource: SubscriptionSource = {
-    id: source.id,
-    name: source.name,
-    type: source.type,
-    url: source.url,
-    content: source.content,
-    filters: source.filters,
-    enabled: source.enabled,
-    meta: source.meta,
-  };
+  const subscriptionSource = sourceToSubscription(source);
 
   return renderDownload(c, {
     source: subscriptionSource,
     sources: [subscriptionSource],
     target,
+    allowOverrides: tokenKind === "main",
   });
 });
 
@@ -61,9 +54,12 @@ async function renderDownload(
     sources: SubscriptionSource[];
     target: SubscriptionTarget;
     templateId?: string;
+    allowOverrides: boolean;
   },
 ) {
-  const sourceOverride = getTemporarySourceOverride(c);
+  // ?url=, ?content= and ?ua= make the Worker fetch or parse caller-chosen input, so only the main download
+  // token may use them. Scoped share tokens silently ignore these parameters.
+  const sourceOverride = options.allowOverrides ? getTemporarySourceOverride(c) : undefined;
   const sources = sourceOverride ? applyTemporarySourceOverride(options.sources, sourceOverride, options.collection) : options.sources;
   const source = sourceOverride && options.source ? applyTemporarySourceOverride([options.source], sourceOverride)[0] : options.source;
   const [template, settings] = await Promise.all([
@@ -80,7 +76,8 @@ async function renderDownload(
       template,
       settings,
       requestUserAgent: c.req.header("user-agent") || "",
-      forceRefresh: ["1", "true"].includes(c.req.query("refresh") || c.req.query("noCache") || ""),
+      // Bypassing the upstream cache is also caller-controlled load, so it follows the same rule.
+      forceRefresh: options.allowOverrides && ["1", "true"].includes(c.req.query("refresh") || c.req.query("noCache") || ""),
       waitUntil: (promise) => c.executionCtx.waitUntil(promise),
     });
     const headers = new Headers({
@@ -146,16 +143,18 @@ function getDownloadToken(c: DownloadContext) {
   return c.req.param("token") || c.req.query("token");
 }
 
-async function rejectInvalidDownloadToken(
+type DownloadTokenKind = "main" | "scoped";
+
+async function authenticateDownloadToken(
   c: DownloadContext,
   resourceType: "source" | "collection",
   resourceId: string,
   target: SubscriptionTarget,
-) {
+): Promise<DownloadTokenKind | undefined> {
   const token = getDownloadToken(c);
-  if (await isTokenValid(c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN, token)) return undefined;
-  if (await authorizeScopedDownload(c.env, token, resourceType, resourceId, target)) return undefined;
-  return failed(c, "Download token is invalid", 403);
+  if (await isTokenValid(c.env.SUB_STORE_PUBLIC_DOWNLOAD_TOKEN, token)) return "main";
+  if (await authorizeScopedDownload(c.env, token, resourceType, resourceId, target)) return "scoped";
+  return undefined;
 }
 
 function getDownloadTarget(c: DownloadContext, defaultTarget?: string) {

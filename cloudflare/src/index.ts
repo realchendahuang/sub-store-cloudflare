@@ -1,18 +1,24 @@
 import { Hono } from "hono";
 import { apiRoutes } from "./routes/api";
 import { downloadRoutes } from "./routes/download";
-import { applyCorsHeaders, applySecurityHeaders } from "./lib/http";
+import { applySecurityHeaders } from "./lib/http";
+import { PayloadTooLargeError } from "./lib/limits";
 
 const app = new Hono<{ Bindings: SubStoreEnv }>();
 
 app.onError((error, c) => {
+  // Oversized stored text is a client error, not a server fault, so it is not logged.
+  if (error instanceof PayloadTooLargeError) {
+    return c.json({ status: "failed", error: { code: 413, message: error.message } }, 413);
+  }
   console.error(JSON.stringify({
     level: "error",
     method: c.req.method,
-    route: c.req.path,
+    // Only the redacted path is logged; query strings can carry tokens and are never logged.
+    route: redactPath(c.req.path),
     requestId: c.req.header("cf-ray") || undefined,
-    message: error.message,
-    stack: error.stack,
+    message: redactSecrets(error.message),
+    stack: error.stack ? redactSecrets(error.stack) : undefined,
   }));
   return c.json(
     {
@@ -24,15 +30,6 @@ app.onError((error, c) => {
     },
     500,
   );
-});
-
-app.options("*", (c) => {
-  return new Response(null, {
-    headers: {
-      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Sub-Store-Token",
-    },
-  });
 });
 
 app.route("/api", apiRoutes);
@@ -67,6 +64,19 @@ export default {
     }
 
     const response = await app.fetch(request, env, ctx);
-    return applySecurityHeaders(applyCorsHeaders(response, request.headers.get("origin") || undefined));
+    return applySecurityHeaders(response);
   },
 } satisfies ExportedHandler<SubStoreEnv>;
+
+// /download/:type/:name/:target/:token carries a share or download token in its fifth segment.
+function redactPath(path: string) {
+  const segments = path.split("/");
+  if (segments[1] === "download") {
+    for (let index = 5; index < segments.length; index += 1) segments[index] = ":token";
+  }
+  return segments.join("/");
+}
+
+function redactSecrets(text: string) {
+  return text.replace(/([?&;]token=)[^&\s"']*/gi, "$1[redacted]");
+}

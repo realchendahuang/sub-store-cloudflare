@@ -8,7 +8,7 @@ import {
   MAX_REMOTE_SOURCE_URLS,
 } from "./limits";
 import { readResponseText, utf8ByteLength } from "./read";
-import { applyScriptAction, validateScriptActions } from "./scripts";
+import { applyScriptAction, isIPv4, isIPv6, validateScriptActions } from "./scripts";
 import type {
   AppSettings,
   FilterRule,
@@ -40,11 +40,30 @@ type BuildOptions = {
   waitUntil?: (promise: Promise<unknown>) => void;
 };
 
+type SubrequestBudget = { limit: number; used: number };
+
 type InternalBuildOptions = BuildOptions & {
   responseMetadata: Map<string, SubscriptionResponseMetadata>;
+  budget?: SubrequestBudget;
+};
+
+type FetchRuntime = Partial<Pick<InternalBuildOptions, "responseMetadata" | "forceRefresh" | "waitUntil" | "budget">>;
+
+type FilterContext = {
+  targetPlatform: SubscriptionTarget;
+  sourceId?: string;
+  collectionId?: string;
+  budget?: SubrequestBudget;
 };
 
 const TEST_URL = "https://www.gstatic.com/generate_204";
+// Workers allow 6 simultaneous open connections and 50 (free plan) subrequests per request.
+const MAX_CONCURRENCY = 6;
+const DEFAULT_SUBREQUEST_LIMIT = 45;
+// Cache entries outlive the freshness TTL so that stale-on-error and 304 revalidation keep working.
+const CACHE_STORE_TTL_SECONDS = 7 * 24 * 60 * 60;
+const CACHED_AT_HEADER = "x-sub-store-cached-at";
+const nameCollator = new Intl.Collator("zh-Hans-CN");
 
 export function getTargetContentType(target: SubscriptionTarget) {
   if (target === "sing-box" || target === "json") return "application/json; charset=utf-8";
@@ -57,10 +76,10 @@ export async function buildSubscription(options: BuildOptions) {
 }
 
 export async function buildSubscriptionResult(options: BuildOptions) {
-  const internal: InternalBuildOptions = { ...options, responseMetadata: new Map() };
+  const internal: InternalBuildOptions = { ...options, responseMetadata: new Map(), budget: createSubrequestBudget(options.settings) };
   const proxies = await loadProxyNodes(internal);
   if (proxies.length === 0) throw new Error("No available nodes found");
-  const body = renderBuildTarget(proxies, options);
+  const body = renderTarget(proxies, options.target, options.requestUrl, options.template?.config);
   return { body, metadata: selectResponseMetadata(internal), nodes: proxies.length };
 }
 
@@ -70,8 +89,9 @@ export async function previewSubscription(options: Pick<BuildOptions, "source" |
     requestUrl: new URL("https://sub-store.local/preview"),
     target: "json",
   });
+  const budget = createSubrequestBudget(options.settings);
   const originalLists = await runWithConcurrency(
-    sources.map((sub) => async () => parseProxies(await loadSubscriptionRaw(sub, options.settings, options.requestUserAgent))),
+    sources.map((sub) => async () => parseProxies(await loadSubscriptionRaw(sub, options.settings, options.requestUserAgent, { budget }))),
     getRequestConcurrency(options.settings),
     getRequestConcurrencyWait(options.settings),
   );
@@ -80,6 +100,7 @@ export async function previewSubscription(options: Pick<BuildOptions, "source" |
     originalLists.map((nodes, index) => async () => applyFilters(nodes, getFilters(sources[index]), options.settings, {
       targetPlatform: "json",
       sourceId: sources[index].id,
+      budget,
     })),
     getRequestConcurrency(options.settings),
     getRequestConcurrencyWait(options.settings),
@@ -87,6 +108,7 @@ export async function previewSubscription(options: Pick<BuildOptions, "source" |
   const processed = addPreviewIds(ensureUniqueProxyNames(await applyFilters(processedLists.flat(), getFilters(options.collection), options.settings, {
     targetPlatform: "json",
     collectionId: options.collection?.id,
+    budget,
   })));
 
   return { original, processed };
@@ -98,6 +120,7 @@ export async function previewSourceContent(source: SubscriptionSource, settings?
   const processed = ensureUniqueProxyNames(await applyFilters(original, getFilters(source), settings, {
     targetPlatform: "json",
     sourceId: source.id,
+    budget: createSubrequestBudget(settings),
   }));
   return {
     original: addPreviewIds(original),
@@ -123,9 +146,10 @@ export async function convertSubscriptionContent(input: {
   const processed = ensureUniqueProxyNames(await applyFilters(parsed, input.filters || [], input.settings, {
     targetPlatform: input.target,
     sourceId: "one-shot",
+    budget: createSubrequestBudget(input.settings),
   }));
   const supported = processed.filter((proxy) => isTargetCompatible(proxy, input.target));
-  const output = renderTarget(supported, input.target, input.template?.config);
+  const output = renderTarget(supported, input.target, new URL("https://sub-store.local/convert"), input.template?.config);
   return {
     content: output,
     parsed: parsed.length,
@@ -159,17 +183,21 @@ async function loadProxyNodes(options: InternalBuildOptions) {
     parseProxies(await loadSubscriptionRaw(sub, options.settings, options.requestUserAgent, options)),
     getFilters(sub),
     options.settings,
-    { targetPlatform: options.target, sourceId: sub.id },
+    { targetPlatform: options.target, sourceId: sub.id, budget: options.budget },
   ));
   const proxyLists = options.collection?.ignoreFailed
-    ? (await runSettledWithConcurrency(tasks, getRequestConcurrency(options.settings), getRequestConcurrencyWait(options.settings))).flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : [],
-      )
+    ? (await runSettledWithConcurrency(tasks, getRequestConcurrency(options.settings), getRequestConcurrencyWait(options.settings))).flatMap((result) => {
+        if (result.status === "fulfilled") return [result.value];
+        // An exhausted budget is a configuration problem; never hide it as a silently missing source.
+        if (result.reason instanceof SubrequestBudgetError) throw result.reason;
+        return [];
+      })
     : await runWithConcurrency(tasks, getRequestConcurrency(options.settings), getRequestConcurrencyWait(options.settings));
 
   return ensureUniqueProxyNames(await applyFilters(proxyLists.flat(), getFilters(options.collection), options.settings, {
     targetPlatform: options.target,
     collectionId: options.collection?.id,
+    budget: options.budget,
   }));
 }
 
@@ -192,11 +220,11 @@ async function loadSubscriptionRaw(
   sub: SubscriptionSource,
   settings?: AppSettings,
   requestUserAgent?: string,
-  runtime?: Pick<InternalBuildOptions, "responseMetadata" | "forceRefresh" | "waitUntil">,
+  runtime?: FetchRuntime,
 ) {
-  if (sub.type === "local" || sub.content) {
-    runtime?.responseMetadata.set(sub.id, metadataFromSource(sub));
-    return String(sub.content || sub.url || "");
+  if (sub.type === "local") {
+    runtime?.responseMetadata?.set(sub.id, metadataFromSource(sub));
+    return decodeMaybeBase64(String(sub.content || sub.url || ""));
   }
 
   const urls = splitSourceUrls(sub.url);
@@ -215,7 +243,7 @@ async function loadSubscriptionRaw(
     throw new Error(`Remote source ${sub.name} exceeds the ${MAX_REMOTE_SOURCE_TOTAL_BYTES / (1024 * 1024)} MiB combined limit`);
   }
   const metadata = contents.map((item) => item.metadata).find((item) => Object.keys(item).length > 0) || metadataFromSource(sub);
-  runtime?.responseMetadata.set(sub.id, metadata);
+  runtime?.responseMetadata?.set(sub.id, metadata);
   return contents.map((item) => decodeMaybeBase64(item.content)).join("\n");
 }
 
@@ -231,14 +259,17 @@ async function fetchSubscriptionUrl(
   sub: SubscriptionSource,
   settings?: AppSettings,
   requestUserAgent?: string,
-  runtime?: Pick<InternalBuildOptions, "forceRefresh" | "waitUntil">,
+  runtime?: FetchRuntime,
 ) {
+  const budget = runtime?.budget;
+  const userAgent = getSourceUserAgent(sub, settings, requestUserAgent);
   const cacheTtl = numberSetting(sub.meta?.cacheTtl ?? settings?.remoteCacheTtl, 300, 0, 3600);
-  const cacheKey = cacheTtl > 0 ? await remoteCacheKey(url, getSourceUserAgent(sub, settings, requestUserAgent)) : undefined;
-  const cached = cacheKey ? await safeCacheMatch(cacheKey) : undefined;
-  if (cached && !runtime?.forceRefresh) {
+  const cacheKey = cacheTtl > 0 ? await remoteCacheKey(url, userAgent) : undefined;
+  // Keep one subrequest in reserve for the upstream fetch that a cache miss needs.
+  const cached = cacheKey && consumeSubrequest(budget, 1) ? await safeCacheMatch(cacheKey) : undefined;
+  if (cached && !runtime?.forceRefresh && isCacheFresh(cached, cacheTtl)) {
     return {
-      content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`),
+      content: await readResponseText(cached.clone(), MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`),
       metadata: metadataFromResponse(cached, "hit"),
     };
   }
@@ -246,32 +277,31 @@ async function fetchSubscriptionUrl(
   const timeout = getRequestTimeout(settings);
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
-    const requestHeaders: Record<string, string> = { "user-agent": getSourceUserAgent(sub, settings, requestUserAgent) };
-    if (cached?.headers.get("x-sub-store-etag")) requestHeaders["if-none-match"] = cached.headers.get("x-sub-store-etag") || "";
-    if (cached?.headers.get("x-sub-store-last-modified")) requestHeaders["if-modified-since"] = cached.headers.get("x-sub-store-last-modified") || "";
+    if (!consumeSubrequest(budget)) throw new SubrequestBudgetError(subrequestBudgetMessage(budget));
+    const requestHeaders: Record<string, string> = { "user-agent": userAgent };
+    const etag = cached?.headers.get("x-sub-store-etag");
+    const lastModified = cached?.headers.get("x-sub-store-last-modified");
+    if (etag) requestHeaders["if-none-match"] = etag;
+    if (lastModified) requestHeaders["if-modified-since"] = lastModified;
     const response = await fetch(url, {
       headers: requestHeaders,
       signal: controller.signal,
     });
     if (response.status === 304 && cached) {
-      return {
-        content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`),
-        metadata: metadataFromResponse(cached, "refresh"),
-      };
+      const content = await readResponseText(cached.clone(), MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Cached remote source ${sub.name}`);
+      const metadata = metadataFromResponse(cached, "refresh");
+      if (cacheKey) await storeRemoteCache(cacheKey, content, metadata, runtime);
+      return { content, metadata };
     }
     if (!response.ok) throw new Error(`Remote source ${sub.name} failed: ${response.status}`);
     const content = await readResponseText(response, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Remote source ${sub.name}`);
     const metadata = metadataFromResponse(response, runtime?.forceRefresh ? "refresh" : "miss");
-    if (cacheKey && cacheTtl > 0) {
-      const put = safeCachePut(cacheKey, content, metadata, cacheTtl);
-      if (runtime?.waitUntil) runtime.waitUntil(put);
-      else await put;
-    }
+    if (cacheKey) await storeRemoteCache(cacheKey, content, metadata, runtime);
     return { content, metadata };
   } catch (error) {
     if (cached && settings?.remoteCacheStaleOnError !== false) {
       return {
-        content: await readResponseText(cached, MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Stale remote source ${sub.name}`),
+        content: await readResponseText(cached.clone(), MAX_REMOTE_SOURCE_RESPONSE_BYTES, `Stale remote source ${sub.name}`),
         metadata: metadataFromResponse(cached, "stale"),
       };
     }
@@ -279,6 +309,44 @@ async function fetchSubscriptionUrl(
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function isCacheFresh(cached: Response, ttlSeconds: number) {
+  const cachedAt = Number(cached.headers.get(CACHED_AT_HEADER));
+  if (!Number.isFinite(cachedAt) || cachedAt <= 0) return false;
+  const age = Date.now() - cachedAt;
+  return age >= 0 && age < ttlSeconds * 1000;
+}
+
+async function storeRemoteCache(key: Request, content: string, metadata: SubscriptionResponseMetadata, runtime?: FetchRuntime) {
+  if (!consumeSubrequest(runtime?.budget)) return;
+  const put = safeCachePut(key, content, metadata);
+  if (runtime?.waitUntil) runtime.waitUntil(put);
+  else await put;
+}
+
+function createSubrequestBudget(settings?: AppSettings): SubrequestBudget | undefined {
+  // Without an explicit limit behave as before (no app-level cap); the platform limit still applies.
+  const raw = settings?.subrequestLimit;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
+  return { limit: numberSetting(raw, DEFAULT_SUBREQUEST_LIMIT, 10, 1000), used: 0 };
+}
+
+export class SubrequestBudgetError extends Error {}
+
+/**
+ * Reserves one subrequest. `reserve` keeps that many additional subrequests available
+ * so optional work (cache lookups) cannot starve required work (upstream fetches).
+ */
+function consumeSubrequest(budget: SubrequestBudget | undefined, reserve = 0) {
+  if (!budget) return true;
+  if (budget.used + 1 + reserve > budget.limit) return false;
+  budget.used += 1;
+  return true;
+}
+
+function subrequestBudgetMessage(budget: SubrequestBudget | undefined) {
+  return `Subrequest budget exhausted (${budget?.limit ?? DEFAULT_SUBREQUEST_LIMIT}); reduce sources/URLs or raise subrequestLimit on a paid plan`;
 }
 
 function getSourceUserAgent(sub: SubscriptionSource, settings?: AppSettings, requestUserAgent?: string) {
@@ -298,7 +366,7 @@ function getRequestTimeout(settings?: AppSettings) {
 }
 
 function getRequestConcurrency(settings?: AppSettings) {
-  return numberSetting(settings?.backendRequestConcurrency, 3, 1, 12);
+  return numberSetting(settings?.backendRequestConcurrency, 3, 1, MAX_CONCURRENCY);
 }
 
 function getRequestConcurrencyWait(settings?: AppSettings) {
@@ -353,12 +421,8 @@ function decodeMaybeBase64(raw: string) {
   const text = raw.trim();
   if (looksLikeStructuredSubscription(text)) return raw;
 
-  try {
-    const decoded = atob(text.replace(/\s+/g, ""));
-    if (looksLikeStructuredSubscription(decoded.trim())) return decoded;
-  } catch {
-    // Non-base64 subscriptions are parsed as-is.
-  }
+  const decoded = decodeBase64UrlText(text);
+  if (decoded && looksLikeStructuredSubscription(decoded.trim())) return decoded;
   return raw;
 }
 
@@ -854,34 +918,71 @@ function parseVless(line: string, index: number): ProxyNode {
   const params = url.searchParams;
   const publicKey = params.get("pbk") || params.get("public-key");
   const shortId = params.get("sid") || params.get("short-id");
-  const security = params.get("security") || (publicKey ? "reality" : "tls");
+  // Missing `security` means none per the share-link spec, but many providers omit it while
+  // still sending TLS-only parameters; treat those as TLS so existing links keep working.
+  const hasTlsHint = ["sni", "fp", "alpn", "allowInsecure", "insecure"].some((key) => params.has(key));
+  const security = (params.get("security") || (publicKey ? "reality" : hasTlsHint ? "tls" : "none")).toLowerCase();
+  const tls = security !== "none";
 
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `vless-${index + 1}`),
+    name: uriName(url, `vless-${index + 1}`),
     type: "vless",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    uuid: decodeURIComponent(url.username),
+    uuid: safeDecodeURIComponent(url.username),
     udp: true,
     flow: params.get("flow") || undefined,
-    network: params.get("type") || "tcp",
-    tls: security !== "none",
-    servername: params.get("sni") || undefined,
+    ...parseUriTransport(params),
+    tls,
+    servername: params.get("sni") || params.get("peer") || undefined,
+    alpn: commaList(params.get("alpn")),
+    "skip-cert-verify": insecureParam(params),
     encryption: params.get("encryption") || "none",
-    "client-fingerprint": params.get("fp") || "chrome",
-    "reality-opts": publicKey ? stripUndefined({ "public-key": publicKey, "short-id": shortId, "spider-x": params.get("spx") || "/" }) : undefined,
+    "client-fingerprint": tls ? params.get("fp") || "chrome" : undefined,
+    "reality-opts": tls && publicKey ? stripUndefined({ "public-key": publicKey, "short-id": shortId, "spider-x": params.get("spx") || "/" }) : undefined,
   });
+}
+
+/** Maps the shared `type`/`path`/`host`/`serviceName` URI parameters used by vless and trojan links. */
+function parseUriTransport(params: URLSearchParams) {
+  const type = (params.get("type") || "tcp").toLowerCase();
+  const path = params.get("path") || undefined;
+  const host = params.get("host") || undefined;
+  if (type === "ws" || type === "httpupgrade") {
+    return {
+      network: "ws",
+      "ws-opts": stripUndefined({
+        path: path || "/",
+        headers: host ? { Host: host } : undefined,
+        "v2ray-http-upgrade": type === "httpupgrade" ? true : undefined,
+      }),
+    };
+  }
+  if (type === "grpc") {
+    const serviceName = params.get("serviceName") || undefined;
+    return {
+      network: "grpc",
+      "grpc-opts": serviceName ? { "grpc-service-name": serviceName } : undefined,
+    };
+  }
+  if (type === "h2" || type === "http") {
+    return {
+      network: "h2",
+      "h2-opts": stripUndefined({ path: path || "/", host: commaList(host || null) }),
+    };
+  }
+  return { network: type };
 }
 
 function parseAnytls(line: string, index: number): ProxyNode {
   const url = new URL(line);
   const params = url.searchParams;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `anytls-${index + 1}`),
+    name: uriName(url, `anytls-${index + 1}`),
     type: "anytls",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    password: decodeURIComponent(url.username),
+    password: safeDecodeURIComponent(url.username),
     sni: params.get("sni") || params.get("peer") || undefined,
     "skip-cert-verify": boolParam(params.get("insecure") || params.get("allowInsecure")),
     "client-fingerprint": params.get("fp") || "chrome",
@@ -889,30 +990,53 @@ function parseAnytls(line: string, index: number): ProxyNode {
 }
 
 function parseHysteria2(line: string, index: number): ProxyNode {
-  const url = new URL(line.replace(/^hy2:\/\//, "hysteria2://"));
+  const { line: normalized, ports: hoppingPorts } = extractPortHopping(line.replace(/^hy2:\/\//, "hysteria2://"));
+  const url = new URL(normalized);
   const params = url.searchParams;
+  // The hysteria2 URI spec treats the whole userinfo ("user:pass") as the auth string.
+  const auth = url.password ? `${safeDecodeURIComponent(url.username)}:${safeDecodeURIComponent(url.password)}` : safeDecodeURIComponent(url.username);
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `hysteria2-${index + 1}`),
+    name: uriName(url, `hysteria2-${index + 1}`),
     type: "hysteria2",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    password: decodeURIComponent(url.username),
+    ports: hoppingPorts || params.get("mport")?.replace(/;/g, ",") || undefined,
+    password: auth,
     sni: params.get("sni") || params.get("peer") || undefined,
+    alpn: commaList(params.get("alpn")),
     "skip-cert-verify": boolParam(params.get("insecure") || params.get("allowInsecure")),
     obfs: params.get("obfs") || undefined,
     "obfs-password": params.get("obfs-password") || params.get("salamander-password") || undefined,
   });
 }
 
+/**
+ * `new URL()` rejects `host:443,5000-6000`. Strip the hopping list from the authority,
+ * keep the first port as the connect port and return the full list separately.
+ */
+function extractPortHopping(line: string) {
+  const match = line.match(/^([a-z0-9+.-]+:\/\/)([^/?#]*)([\s\S]*)$/i);
+  if (!match) return { line, ports: undefined };
+  const [, scheme, authority, rest] = match;
+  const at = authority.lastIndexOf("@");
+  const userInfo = authority.slice(0, at + 1);
+  const hostPort = authority.slice(at + 1);
+  const portMatch = hostPort.match(/^(.*):(\d+(?:[-,;]\d+)+)$/);
+  if (!portMatch) return { line, ports: undefined };
+  const ports = portMatch[2].replace(/;/g, ",");
+  const firstPort = ports.split(/[-,]/)[0];
+  return { line: `${scheme}${userInfo}${portMatch[1]}:${firstPort}${rest}`, ports };
+}
+
 function parseHysteria(line: string, index: number): ProxyNode {
   const url = new URL(line.replace(/^hy:\/\//, "hysteria://"));
   const params = url.searchParams;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `hysteria-${index + 1}`),
+    name: uriName(url, `hysteria-${index + 1}`),
     type: "hysteria",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    auth_str: decodeURIComponent(url.username || params.get("auth") || params.get("auth_str") || ""),
+    auth_str: safeDecodeURIComponent(url.username || params.get("auth") || params.get("auth_str") || ""),
     protocol: params.get("protocol") || undefined,
     up: params.get("up") || params.get("upmbps") || undefined,
     down: params.get("down") || params.get("downmbps") || undefined,
@@ -926,21 +1050,43 @@ function parseHysteria(line: string, index: number): ProxyNode {
 
 function parseTrojan(line: string, index: number): ProxyNode {
   const url = new URL(line);
+  const params = url.searchParams;
+  const type = (params.get("type") || "tcp").toLowerCase();
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `trojan-${index + 1}`),
+    name: uriName(url, `trojan-${index + 1}`),
     type: "trojan",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    password: decodeURIComponent(url.username),
-    sni: url.searchParams.get("sni") || url.searchParams.get("peer") || undefined,
-    "skip-cert-verify": boolParam(url.searchParams.get("allowInsecure")),
+    password: safeDecodeURIComponent(url.username),
+    sni: params.get("sni") || params.get("peer") || undefined,
+    alpn: commaList(params.get("alpn")),
+    "skip-cert-verify": boolParam(params.get("allowInsecure") || params.get("insecure")),
+    "client-fingerprint": params.get("fp") || undefined,
+    ...(type === "tcp" ? {} : parseUriTransport(params)),
     udp: true,
   });
 }
 
 function parseVmess(line: string, index: number): ProxyNode | undefined {
   try {
-    const payload = JSON.parse(atob(line.slice("vmess://".length)));
+    const payload = JSON.parse(decodeBase64UrlText(line.slice("vmess://".length)));
+    const tls = payload.tls === "tls";
+    const net = String(payload.net || "tcp").toLowerCase();
+    const host = payload.host ? String(payload.host) : undefined;
+    const path = payload.path ? String(payload.path) : undefined;
+    const transport: Record<string, unknown> = { network: net };
+    if (net === "ws" || net === "httpupgrade") {
+      transport.network = "ws";
+      transport["ws-opts"] = stripUndefined({
+        path: path || "/",
+        headers: host ? { Host: host } : undefined,
+        "v2ray-http-upgrade": net === "httpupgrade" ? true : undefined,
+      });
+    } else if (net === "grpc") {
+      transport["grpc-opts"] = path ? { "grpc-service-name": path } : undefined;
+    } else if (net === "h2") {
+      transport["h2-opts"] = stripUndefined({ path: path || "/", host: commaList(host || null) });
+    }
     return stripUndefined({
       name: payload.ps || `vmess-${index + 1}`,
       type: "vmess",
@@ -949,10 +1095,11 @@ function parseVmess(line: string, index: number): ProxyNode | undefined {
       uuid: payload.id,
       alterId: Number(payload.aid || 0),
       cipher: payload.scy || "auto",
-      tls: payload.tls === "tls",
+      tls,
       servername: payload.sni || payload.host || undefined,
-      network: payload.net || "tcp",
-      "ws-opts": payload.net === "ws" ? { path: payload.path || "/", headers: { Host: payload.host } } : undefined,
+      alpn: commaList(typeof payload.alpn === "string" ? payload.alpn : null),
+      "client-fingerprint": tls && payload.fp ? String(payload.fp) : undefined,
+      ...transport,
       udp: true,
     });
   } catch {
@@ -963,24 +1110,71 @@ function parseVmess(line: string, index: number): ProxyNode | undefined {
 function parseShadowsocks(line: string, index: number): ProxyNode | undefined {
   try {
     const withoutScheme = line.slice("ss://".length);
-    const [main, hash = ""] = withoutScheme.split("#");
-    const decodedMain = main.includes("@") ? main : atob(main);
-    const [userInfo, hostInfo] = decodedMain.split("@");
-    const decodedUserInfo = userInfo.includes(":") ? userInfo : decodeBase64UrlText(userInfo);
-    const [cipher, password] = decodedUserInfo.split(":");
+    const hashIndex = withoutScheme.indexOf("#");
+    const main = hashIndex >= 0 ? withoutScheme.slice(0, hashIndex) : withoutScheme;
+    const hash = hashIndex >= 0 ? withoutScheme.slice(hashIndex + 1) : "";
+    const queryIndex = main.indexOf("?");
+    const query = new URLSearchParams(queryIndex >= 0 ? main.slice(queryIndex + 1) : "");
+    const core = queryIndex >= 0 ? main.slice(0, queryIndex).replace(/\/+$/, "") : main;
+
+    // SIP002 keeps "@" in clear text; the legacy form base64-encodes "method:password@host:port" as a whole.
+    const legacy = !core.includes("@");
+    const decodedMain = legacy ? decodeBase64UrlText(core) : core;
+    const atIndex = decodedMain.lastIndexOf("@");
+    if (atIndex < 0) return undefined;
+    let userInfo = decodedMain.slice(0, atIndex);
+    if (!userInfo.includes(":")) userInfo = decodeBase64UrlText(safeDecodeURIComponent(userInfo));
+    else if (!legacy) userInfo = safeDecodeURIComponent(userInfo);
+    const separator = userInfo.indexOf(":");
+    if (separator <= 0) return undefined;
+    const cipher = userInfo.slice(0, separator);
+    const password = userInfo.slice(separator + 1);
+
+    const hostInfo = decodedMain.slice(atIndex + 1).split("/")[0];
     const lastColon = hostInfo.lastIndexOf(":");
+    if (lastColon <= 0) return undefined;
+    const port = Number(hostInfo.slice(lastColon + 1));
+    if (!Number.isInteger(port) || port <= 0) return undefined;
+    const plugin = parseShadowsocksPlugin(query.get("plugin"));
     return stripUndefined({
-      name: decodeURIComponent(hash || `ss-${index + 1}`),
+      name: safeDecodeURIComponent(hash || `ss-${index + 1}`),
       type: "ss",
-      server: hostInfo.slice(0, lastColon),
-      port: Number(hostInfo.slice(lastColon + 1).split("?")[0]),
+      server: hostInfo.slice(0, lastColon).replace(/^\[(.*)\]$/, "$1"),
+      port,
       cipher,
       password,
+      ...plugin,
       udp: true,
     });
   } catch {
     return undefined;
   }
+}
+
+function parseShadowsocksPlugin(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  const [name, ...parts] = raw.split(";");
+  const options = new Map<string, string>();
+  for (const part of parts) {
+    const equalIndex = part.indexOf("=");
+    if (equalIndex < 0) options.set(part.trim().toLowerCase(), "true");
+    else options.set(part.slice(0, equalIndex).trim().toLowerCase(), part.slice(equalIndex + 1).trim());
+  }
+  if (name === "obfs-local" || name === "simple-obfs") {
+    return { plugin: "obfs", "plugin-opts": stripUndefined({ mode: options.get("obfs"), host: options.get("obfs-host") }) };
+  }
+  if (name === "v2ray-plugin") {
+    return {
+      plugin: "v2ray-plugin",
+      "plugin-opts": stripUndefined({
+        mode: options.get("mode") || "websocket",
+        host: options.get("host"),
+        path: options.get("path"),
+        tls: options.has("tls") ? true : undefined,
+      }),
+    };
+  }
+  return {};
 }
 
 function parseShadowsocksR(line: string, index: number): ProxyNode | undefined {
@@ -1013,12 +1207,12 @@ function parseSocks(line: string, index: number): ProxyNode | undefined {
   const url = new URL(normalizedLine);
   if (!url.port) return undefined;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `socks5-${index + 1}`),
+    name: uriName(url, `socks5-${index + 1}`),
     type: "socks5",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port),
-    username: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
+    username: safeDecodeURIComponent(url.username),
+    password: safeDecodeURIComponent(url.password),
     tls: line.startsWith("socks5+tls://") || boolParam(url.searchParams.get("tls")),
     udp: true,
   });
@@ -1028,12 +1222,12 @@ function parseHttpProxy(line: string, index: number): ProxyNode | undefined {
   const url = new URL(line);
   if (!url.port) return undefined;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `${url.protocol === "https:" ? "https" : "http"}-${index + 1}`),
+    name: uriName(url, `${url.protocol === "https:" ? "https" : "http"}-${index + 1}`),
     type: "http",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port),
-    username: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
+    username: safeDecodeURIComponent(url.username),
+    password: safeDecodeURIComponent(url.password),
     tls: url.protocol === "https:",
   });
 }
@@ -1042,12 +1236,12 @@ function parseTuic(line: string, index: number): ProxyNode {
   const url = new URL(line);
   const params = url.searchParams;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `tuic-${index + 1}`),
+    name: uriName(url, `tuic-${index + 1}`),
     type: "tuic",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 443),
-    uuid: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
+    uuid: safeDecodeURIComponent(url.username),
+    password: safeDecodeURIComponent(url.password),
     sni: params.get("sni") || undefined,
     alpn: commaList(params.get("alpn")),
     "skip-cert-verify": boolParam(params.get("allow_insecure") || params.get("insecure")),
@@ -1062,13 +1256,13 @@ function parseWireGuard(line: string, index: number): ProxyNode {
   const url = new URL(line.replace(/^wg:\/\//, "wireguard://"));
   const params = url.searchParams;
   return stripUndefined({
-    name: decodeURIComponent(url.hash.slice(1) || `wireguard-${index + 1}`),
+    name: uriName(url, `wireguard-${index + 1}`),
     type: "wireguard",
-    server: url.hostname,
+    server: uriHostname(url),
     port: Number(url.port || 51820),
     ip: params.get("ip") || params.get("address") || undefined,
     ipv6: params.get("ipv6") || undefined,
-    "private-key": decodeURIComponent(url.username || params.get("private-key") || params.get("privatekey") || ""),
+    "private-key": safeDecodeURIComponent(url.username || params.get("private-key") || params.get("privatekey") || ""),
     "public-key": params.get("public-key") || params.get("publickey") || params.get("peer-public-key") || undefined,
     "pre-shared-key": params.get("pre-shared-key") || params.get("presharedkey") || params.get("psk") || undefined,
     reserved: params.get("reserved") || undefined,
@@ -1080,7 +1274,7 @@ async function applyFilters(
   proxies: ProxyNode[],
   filters: FilterRule[],
   settings?: AppSettings,
-  scriptContext: { targetPlatform: SubscriptionTarget; sourceId?: string; collectionId?: string } = { targetPlatform: "json" },
+  scriptContext: FilterContext = { targetPlatform: "json" },
 ) {
   const scriptError = validateScriptActions(filters);
   if (scriptError) throw new Error(scriptError);
@@ -1096,7 +1290,7 @@ async function applyFilters(
     else if (filter.type === "regex-sort") current = regexSortProxies(current, filter);
     else if (filter.type === "flag") current = flagProxies(current, filter);
     else if (filter.type === "quick") current = applyQuickSettings(current, filter);
-    else if (filter.type === "resolve") current = await resolveProxyDomains(current, filter, settings);
+    else if (filter.type === "resolve") current = await resolveProxyDomains(current, filter, settings, scriptContext.budget);
     else if (filter.type === "script") current = await applyScriptAction(current, filter, scriptContext.targetPlatform, {
       sourceId: scriptContext.sourceId,
       collectionId: scriptContext.collectionId,
@@ -1127,9 +1321,10 @@ function deleteFieldMatches(proxies: ProxyNode[], filter: FilterRule) {
   const patterns = filter.patterns || (filter.pattern ? [filter.pattern] : []);
   if (patterns.length === 0) return proxies;
   const field = filter.field || "name";
+  const expressions = patterns.map((pattern) => compileRegex(String(pattern), "g"));
   return proxies.map((proxy) => {
     const next = { ...proxy };
-    const value = patterns.reduce((name, pattern) => name.replace(compileRegex(String(pattern), "g"), ""), String(getByPath(next, field) || ""));
+    const value = expressions.reduce((name, expression) => name.replace(expression, ""), String(getByPath(next, field) || ""));
     return setByPath(next, field, value.trim());
   });
 }
@@ -1182,7 +1377,12 @@ function renameDuplicateProxies(proxies: ProxyNode[], fields: string[], filter: 
 }
 
 function duplicateKey(proxy: ProxyNode, fields: string[]) {
-  return fields.map((field) => String(getByPath(proxy, field) || "-")).join("\n");
+  // Missing values get an explicit marker so 0, "" and undefined stay distinct.
+  return JSON.stringify(fields.map((field) => {
+    const value = getByPath(proxy, field);
+    if (value === undefined || value === null) return null;
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+  }));
 }
 
 function formatDuplicateNumber(input: number, minLength: number, digits: string[]) {
@@ -1199,10 +1399,8 @@ function formatDuplicateNumber(input: number, minLength: number, digits: string[
 
 function sortProxies(proxies: ProxyNode[], direction: string) {
   if (direction === "random") return shuffleProxies(proxies);
-  return [...proxies].sort((a, b) => {
-    const result = a.name.localeCompare(b.name, "zh-Hans-CN");
-    return direction === "desc" ? -result : result;
-  });
+  const sign = direction === "desc" ? -1 : 1;
+  return [...proxies].sort((a, b) => sign * nameCollator.compare(a.name, b.name));
 }
 
 function regexSortProxies(proxies: ProxyNode[], filter: FilterRule) {
@@ -1213,15 +1411,16 @@ function regexSortProxies(proxies: ProxyNode[], filter: FilterRule) {
   const direction = filter.direction || "asc";
   if (expressions.length === 0) return sortProxies(proxies, direction);
 
-  return [...proxies].sort((a, b) => {
-    const left = regexOrder(expressions, a.name);
-    const right = regexOrder(expressions, b.name);
-    if (left && !right) return -1;
-    if (right && !left) return 1;
-    if (left && right) return left - right;
-    if (direction === "original") return 0;
-    return sortProxies([a, b], direction)[0] === a ? -1 : 1;
-  });
+  // Matched nodes follow expression order; unmatched nodes follow the requested direction.
+  const buckets: ProxyNode[][] = expressions.map(() => []);
+  const unmatched: ProxyNode[] = [];
+  for (const proxy of proxies) {
+    const order = regexOrder(expressions, proxy.name);
+    if (order > 0) buckets[order - 1].push(proxy);
+    else unmatched.push(proxy);
+  }
+  const orderedUnmatched = direction === "original" ? unmatched : sortProxies(unmatched, direction);
+  return [...buckets.flatMap((bucket) => (direction === "random" ? shuffleProxies(bucket) : bucket)), ...orderedUnmatched];
 }
 
 function regexOrder(expressions: RegExp[], name: string) {
@@ -1277,32 +1476,49 @@ function applyQuickSettings(proxies: ProxyNode[], filter: FilterRule) {
   });
 }
 
-async function resolveProxyDomains(proxies: ProxyNode[], filter: FilterRule, settings?: AppSettings) {
-  const tasks = proxies.map((proxy) => async () => resolveProxyDomain(proxy, filter, settings));
+async function resolveProxyDomains(proxies: ProxyNode[], filter: FilterRule, settings?: AppSettings, budget?: SubrequestBudget) {
+  // Each hostname is resolved once, however many nodes share it.
+  const lookups = new Map<string, Promise<string | undefined>>();
+  const tasks = proxies.map((proxy) => async () => resolveProxyDomain(proxy, filter, settings, budget, lookups));
   const resolved = await runWithConcurrency(tasks, getResolveConcurrency(filter, settings), getRequestConcurrencyWait(settings));
   const mode = String(filter.filter || "disabled");
 
   return resolved
-    .filter(({ proxy, resolved }) => {
+    .filter(({ proxy, resolved, skipped }) => {
+      // Nodes skipped because the subrequest budget ran out are kept only in modes that don't require resolution.
+      if (skipped) return mode === "disabled";
       if (mode === "removeFailed") return resolved || !shouldResolveServer(proxy.server);
       if (mode === "IPOnly") return isIpAddress(String(proxy.server || ""));
-      if (mode === "IPv4Only") return isIpv4(String(proxy.server || ""));
-      if (mode === "IPv6Only") return isIpv6(String(proxy.server || ""));
+      if (mode === "IPv4Only") return isIPv4(String(proxy.server || ""));
+      if (mode === "IPv6Only") return isIPv6(String(proxy.server || ""));
       return true;
     })
     .map(({ proxy }) => proxy);
 }
 
-async function resolveProxyDomain(proxy: ProxyNode, filter: FilterRule, settings?: AppSettings) {
+async function resolveProxyDomain(
+  proxy: ProxyNode,
+  filter: FilterRule,
+  settings: AppSettings | undefined,
+  budget: SubrequestBudget | undefined,
+  lookups: Map<string, Promise<string | undefined>>,
+) {
   const server = String(proxy.server || "");
-  if (!shouldResolveServer(server)) return { proxy, resolved: false };
+  if (!shouldResolveServer(server)) return { proxy, resolved: false, skipped: false };
 
   try {
-    const address = await resolveHostname(server, filter, settings);
-    if (!address) return { proxy, resolved: false };
-    return { proxy: preserveTlsServerName({ ...proxy, server: address }, server), resolved: true };
+    const key = server.toLowerCase();
+    let lookup = lookups.get(key);
+    if (!lookup) {
+      lookup = resolveHostname(server, filter, settings, budget);
+      lookups.set(key, lookup);
+    }
+    const address = await lookup;
+    if (address === undefined) return { proxy, resolved: false, skipped: true };
+    if (!address) return { proxy, resolved: false, skipped: false };
+    return { proxy: preserveTlsServerName({ ...proxy, server: address }, server), resolved: true, skipped: false };
   } catch {
-    return { proxy, resolved: false };
+    return { proxy, resolved: false, skipped: false };
   }
 }
 
@@ -1317,7 +1533,9 @@ function preserveTlsServerName(proxy: ProxyNode, originalServer: string) {
   return next;
 }
 
-async function resolveHostname(hostname: string, filter: FilterRule, settings?: AppSettings) {
+/** Resolves to an address, "" when the lookup failed, or undefined when the subrequest budget is exhausted. */
+async function resolveHostname(hostname: string, filter: FilterRule, settings?: AppSettings, budget?: SubrequestBudget) {
+  if (!consumeSubrequest(budget)) return undefined;
   const recordType = getResolveRecordType(filter);
   const url = getResolveEndpoint(filter, hostname, recordType);
   const controller = new AbortController();
@@ -1332,7 +1550,7 @@ async function resolveHostname(hostname: string, filter: FilterRule, settings?: 
     const answerType = recordType === "AAAA" ? 28 : 1;
     return (payload.Answer || [])
       .map((answer) => (answer.type === answerType ? String(answer.data || "") : ""))
-      .find((item) => (recordType === "AAAA" ? isIpv6(item) : isIpv4(item))) || "";
+      .find((item) => (recordType === "AAAA" ? isIPv6(item) : isIPv4(item))) || "";
   } finally {
     clearTimeout(timeoutId);
   }
@@ -1378,7 +1596,7 @@ function getResolveRecordType(filter: FilterRule): "A" | "AAAA" {
 }
 
 function getResolveConcurrency(filter: FilterRule, settings?: AppSettings) {
-  return numberSetting(filter.concurrency, getRequestConcurrency(settings), 1, 12);
+  return numberSetting(filter.concurrency, getRequestConcurrency(settings), 1, MAX_CONCURRENCY);
 }
 
 function shouldResolveServer(server: unknown) {
@@ -1387,16 +1605,7 @@ function shouldResolveServer(server: unknown) {
 }
 
 function isIpAddress(value: string) {
-  return isIpv4(value) || isIpv6(value);
-}
-
-function isIpv4(value: string) {
-  const parts = value.split(".");
-  return parts.length === 4 && parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
-}
-
-function isIpv6(value: string) {
-  return value.includes(":") && /^[0-9a-f:]+$/i.test(value);
+  return isIPv4(value) || isIPv6(value);
 }
 
 function applyState(proxy: ProxyNode, key: string, value: unknown) {
@@ -1427,19 +1636,20 @@ function isAscii(input: string) {
   return /^[\x00-\x7F]+$/.test(input);
 }
 
+const FLAG_RULES: Array<[RegExp, string]> = [
+  [/香港|港|hong\s*kong|\bhk\b/, "🇭🇰"],
+  [/台湾|台灣|taiwan|\btw\b/, "🇹🇼"],
+  [/新加坡|狮城|獅城|singapore|\bsg\b/, "🇸🇬"],
+  [/日本|东京|東京|大阪|japan|tokyo|osaka|\bjp\b/, "🇯🇵"],
+  [/美国|美國|洛杉矶|洛杉磯|纽约|紐約|united\s*states|los\s*angeles|new\s*york|\bus\b|\busa\b/, "🇺🇸"],
+  [/英国|英國|伦敦|倫敦|united\s*kingdom|london|\buk\b/, "🇬🇧"],
+  [/德国|德國|法兰克福|法蘭克福|germany|frankfurt|\bde\b/, "🇩🇪"],
+  [/韩国|韓國|首尔|首爾|korea|seoul|\bkr\b/, "🇰🇷"],
+];
+
 function detectFlag(name: string) {
   const text = name.toLowerCase();
-  const rules: Array<[RegExp, string]> = [
-    [/香港|港|hong\s*kong|\bhk\b/, "🇭🇰"],
-    [/台湾|台灣|taiwan|\btw\b/, "🇹🇼"],
-    [/新加坡|狮城|獅城|singapore|\bsg\b/, "🇸🇬"],
-    [/日本|东京|東京|大阪|japan|tokyo|osaka|\bjp\b/, "🇯🇵"],
-    [/美国|美國|洛杉矶|洛杉磯|纽约|紐約|united\s*states|los\s*angeles|new\s*york|\bus\b|\busa\b/, "🇺🇸"],
-    [/英国|英國|伦敦|倫敦|united\s*kingdom|london|\buk\b/, "🇬🇧"],
-    [/德国|德國|法兰克福|法蘭克福|germany|frankfurt|\bde\b/, "🇩🇪"],
-    [/韩国|韓國|首尔|首爾|korea|seoul|\bkr\b/, "🇰🇷"],
-  ];
-  return rules.find(([pattern]) => pattern.test(text))?.[1] || "🏳️";
+  return FLAG_RULES.find(([pattern]) => pattern.test(text))?.[1] || "🏳️";
 }
 
 function removeFlag(name: string) {
@@ -1454,11 +1664,25 @@ function normalizeTaiwanFlag(flag: string, mode: string) {
 }
 
 function ensureUniqueProxyNames(proxies: ProxyNode[]) {
-  const seen = new Map<string, number>();
+  const taken = new Set(proxies.map((proxy) => proxy.name));
+  const seen = new Set<string>();
+  const counters = new Map<string, number>();
   return proxies.map((proxy) => {
-    const count = seen.get(proxy.name) || 0;
-    seen.set(proxy.name, count + 1);
-    return count === 0 ? proxy : { ...proxy, name: `${proxy.name}-${count + 1}` };
+    if (!seen.has(proxy.name)) {
+      seen.add(proxy.name);
+      return proxy;
+    }
+    // Skip suffixes that collide with any other node name, not just earlier duplicates.
+    let counter = counters.get(proxy.name) || 1;
+    let candidate: string;
+    do {
+      counter += 1;
+      candidate = `${proxy.name}-${counter}`;
+    } while (taken.has(candidate) || seen.has(candidate));
+    counters.set(proxy.name, counter);
+    taken.add(candidate);
+    seen.add(candidate);
+    return { ...proxy, name: candidate };
   });
 }
 
@@ -1527,6 +1751,7 @@ function defaultProxyGroups(): TemplateProxyGroup[] {
 
 function renderTemplateProxyGroups(proxies: ProxyNode[], groupTemplates: TemplateProxyGroup[]) {
   const nodeNames = proxies.map((proxy) => proxy.name);
+  const nodeNameSet = new Set(nodeNames);
   const rawGroups = groupTemplates.map((group) => ({
     ...group,
     proxies: expandGroupProxies(group, nodeNames),
@@ -1537,7 +1762,7 @@ function renderTemplateProxyGroups(proxies: ProxyNode[], groupTemplates: Templat
   return rawGroups
     .map((group) => {
       const proxyEntries = group.proxies.filter(
-        (name) => nodeNames.includes(name) || includedGroupNames.has(name) || allowedLiterals.has(name),
+        (name) => nodeNameSet.has(name) || includedGroupNames.has(name) || allowedLiterals.has(name),
       );
       if (proxyEntries.length === 0) return undefined;
       const { filter: _filter, proxies: _proxies, ...rest } = group;
@@ -1660,35 +1885,24 @@ function toSurfboardProxyLine(proxy: ProxyNode) {
     : undefined;
 }
 
-function renderTarget(proxies: ProxyNode[], target: SubscriptionTarget, template?: RoutingTemplateConfig) {
+function renderTarget(proxies: ProxyNode[], target: SubscriptionTarget, requestUrl: URL, template?: RoutingTemplateConfig) {
   if (proxies.length === 0) throw new Error(`No supported nodes for ${target} output`);
-  if (target === "mihomo" || target === "stash") return renderMihomoYaml(proxies, new URL("https://sub-store.local/convert"), template);
-  if (target === "surge") return renderSurgeProxies(proxies);
-  if (target === "surge-mac") return renderSurgeMacProxies(proxies);
-  if (target === "surfboard") return renderSurfboardProxies(proxies);
-  if (target === "loon") return renderLoonProxies(proxies);
-  if (target === "egern") return renderEgernYaml(proxies);
-  if (target === "qx") return renderQxProxies(proxies);
-  if (target === "sing-box") return renderSingBoxJson(proxies);
-  if (target === "v2ray") return base64Utf8(renderProxyUris(proxies));
-  if (target === "uri" || target === "shadowrocket") return renderProxyUris(proxies);
-  return JSON.stringify({ proxies }, null, 2);
-}
-
-function renderBuildTarget(proxies: ProxyNode[], options: BuildOptions) {
-  if (options.target === "mihomo" || options.target === "stash") return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
-  if (options.target === "surge") return renderSurgeProxies(proxies);
-  if (options.target === "surge-mac") return renderSurgeMacProxies(proxies);
-  if (options.target === "surfboard") return renderSurfboardProxies(proxies);
-  if (options.target === "loon") return renderLoonProxies(proxies);
-  if (options.target === "egern") return renderEgernYaml(proxies);
-  if (options.target === "shadowrocket") return renderProxyUris(proxies);
-  if (options.target === "qx") return renderQxProxies(proxies);
-  if (options.target === "sing-box") return renderSingBoxJson(proxies);
-  if (options.target === "v2ray") return base64Utf8(renderProxyUris(proxies));
-  if (options.target === "uri") return renderProxyUris(proxies);
-  if (options.target === "json") return JSON.stringify({ proxies }, null, 2);
-  return renderMihomoYaml(proxies, options.requestUrl, options.template?.config);
+  switch (target) {
+    case "surge": return renderSurgeProxies(proxies);
+    case "surge-mac": return renderSurgeMacProxies(proxies);
+    case "surfboard": return renderSurfboardProxies(proxies);
+    case "loon": return renderLoonProxies(proxies);
+    case "egern": return renderEgernYaml(proxies);
+    case "qx": return renderQxProxies(proxies);
+    case "sing-box": return renderSingBoxJson(proxies);
+    case "v2ray": return base64Utf8(renderProxyUris(proxies));
+    case "uri":
+    case "shadowrocket": return renderProxyUris(proxies);
+    case "json": return JSON.stringify({ proxies }, null, 2);
+    case "mihomo":
+    case "stash":
+    default: return renderMihomoYaml(proxies, requestUrl, template);
+  }
 }
 
 function selectResponseMetadata(options: InternalBuildOptions) {
@@ -1702,9 +1916,9 @@ function selectResponseMetadata(options: InternalBuildOptions) {
 
 function metadataFromSource(source: SubscriptionSource): SubscriptionResponseMetadata {
   return {
-    subscriptionUserinfo: stringSetting(source.meta?.subUserinfo) || stringSetting(source.meta?.subscriptionUserinfo),
-    profileWebPageUrl: stringSetting(source.meta?.profileWebPageUrl) || stringSetting(source.meta?.appUrl),
-    profileUpdateInterval: stringSetting(source.meta?.profileUpdateInterval),
+    subscriptionUserinfo: safeHeaderValue(stringSetting(source.meta?.subUserinfo) || stringSetting(source.meta?.subscriptionUserinfo)),
+    profileWebPageUrl: safeHeaderValue(stringSetting(source.meta?.profileWebPageUrl) || stringSetting(source.meta?.appUrl)),
+    profileUpdateInterval: safeHeaderValue(stringSetting(source.meta?.profileUpdateInterval)),
     contentDisposition: safeContentDisposition(stringSetting(source.meta?.contentDisposition)),
     cacheStatus: "disabled",
   };
@@ -1712,14 +1926,21 @@ function metadataFromSource(source: SubscriptionSource): SubscriptionResponseMet
 
 function metadataFromResponse(response: Response, cacheStatus: SubscriptionResponseMetadata["cacheStatus"]): SubscriptionResponseMetadata {
   return {
-    subscriptionUserinfo: response.headers.get("subscription-userinfo") || response.headers.get("x-sub-store-subscription-userinfo") || undefined,
-    profileWebPageUrl: response.headers.get("profile-web-page-url") || response.headers.get("x-sub-store-profile-web-page-url") || undefined,
-    profileUpdateInterval: response.headers.get("profile-update-interval") || response.headers.get("x-sub-store-profile-update-interval") || undefined,
+    subscriptionUserinfo: safeHeaderValue(response.headers.get("subscription-userinfo") || response.headers.get("x-sub-store-subscription-userinfo")),
+    profileWebPageUrl: safeHeaderValue(response.headers.get("profile-web-page-url") || response.headers.get("x-sub-store-profile-web-page-url")),
+    profileUpdateInterval: safeHeaderValue(response.headers.get("profile-update-interval") || response.headers.get("x-sub-store-profile-update-interval")),
     contentDisposition: safeContentDisposition(response.headers.get("content-disposition") || response.headers.get("x-sub-store-content-disposition") || ""),
-    etag: response.headers.get("etag") || response.headers.get("x-sub-store-etag") || undefined,
-    lastModified: response.headers.get("last-modified") || response.headers.get("x-sub-store-last-modified") || undefined,
+    etag: safeHeaderValue(response.headers.get("etag") || response.headers.get("x-sub-store-etag")),
+    lastModified: safeHeaderValue(response.headers.get("last-modified") || response.headers.get("x-sub-store-last-modified")),
     cacheStatus,
   };
+}
+
+/** Header values must be ByteStrings without line breaks or control characters; anything else is dropped. */
+function safeHeaderValue(value: string | null | undefined) {
+  if (!value) return undefined;
+  if (/[^\u0000-\u00ff]/.test(value) || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value)) return undefined;
+  return value;
 }
 
 async function remoteCacheKey(url: string, userAgent: string) {
@@ -1740,12 +1961,12 @@ async function safeCachePut(
   key: Request,
   content: string,
   metadata: SubscriptionResponseMetadata,
-  ttl: number,
 ) {
   try {
     const headers = new Headers({
       "content-type": "text/plain; charset=utf-8",
-      "cache-control": `public, s-maxage=${ttl}`,
+      "cache-control": `public, s-maxage=${CACHE_STORE_TTL_SECONDS}`,
+      [CACHED_AT_HEADER]: String(Date.now()),
     });
     setInternalMetadataHeader(headers, "x-sub-store-subscription-userinfo", metadata.subscriptionUserinfo);
     setInternalMetadataHeader(headers, "x-sub-store-profile-web-page-url", metadata.profileWebPageUrl);
@@ -1765,10 +1986,25 @@ function setInternalMetadataHeader(headers: Headers, name: string, value: string
 
 function safeContentDisposition(value: string) {
   if (!value || /[\r\n]/.test(value)) return undefined;
-  const filename = value.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i)?.[1]?.trim();
+  const filename = parseDispositionFilename(value);
   if (!filename) return undefined;
-  const safe = filename.replace(/[^a-zA-Z0-9._()\-\u4e00-\u9fff ]/g, "_").slice(0, 120);
-  return safe ? `attachment; filename="${safe}"` : undefined;
+  const safeName = Array.from(filename.replace(/[\u0000-\u001f\u007f"\\/;]/g, "_")).slice(0, 120).join("").trim();
+  if (!safeName) return undefined;
+  const fallback = safeName.replace(/[^a-zA-Z0-9._() -]/g, "_");
+  const encoded = encodeURIComponent(safeName).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function parseDispositionFilename(value: string) {
+  const extended = value.match(/filename\*\s*=\s*[^';]*'[^']*'([^;]+)/i)?.[1]?.trim();
+  if (extended) {
+    try {
+      return decodeURIComponent(extended);
+    } catch {
+      // Fall through to the plain filename parameter.
+    }
+  }
+  return value.match(/filename\s*=\s*(?:"([^"]+)"|([^";]+))/i)?.slice(1).find(Boolean)?.trim();
 }
 
 function surgeType(proxy: ProxyNode) {
@@ -2038,15 +2274,15 @@ function renderSingBoxJson(proxies: ProxyNode[]) {
     },
     ...nodeOutbounds,
     { type: "direct", tag: "DIRECT" },
-    { type: "block", tag: "REJECT" },
   ];
 
   return JSON.stringify(
     {
       log: { level: "info" },
-      inbounds: [{ type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 7890, sniff: true }],
+      inbounds: [{ type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 7890 }],
       outbounds,
-      route: { auto_detect_interface: true, final: "PROXY" },
+      // sing-box 1.11+: sniffing is a route rule action and nothing here references a REJECT/block outbound.
+      route: { rules: [{ action: "sniff" }], auto_detect_interface: true, final: "PROXY" },
     },
     null,
     2,
@@ -2055,7 +2291,6 @@ function renderSingBoxJson(proxies: ProxyNode[]) {
 
 function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
   if (proxy.type === "vless") {
-    const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
     return stripUndefined({
       type: "vless",
       tag: proxy.name,
@@ -2063,18 +2298,9 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
       server_port: proxy.port,
       uuid: proxy.uuid,
       flow: proxy.flow,
-      network: proxy.network || "tcp",
       packet_encoding: "xudp",
-      tls: proxy.tls
-        ? stripUndefined({
-            enabled: true,
-            server_name: proxy.servername,
-            utls: { enabled: true, fingerprint: proxy["client-fingerprint"] || "chrome" },
-            reality: realityOpts
-              ? stripUndefined({ enabled: true, public_key: realityOpts["public-key"], short_id: realityOpts["short-id"] })
-              : undefined,
-          })
-        : undefined,
+      tls: proxy.tls ? singBoxTls(proxy, proxy.servername, { utls: "always" }) : undefined,
+      transport: singBoxTransport(proxy),
     });
   }
 
@@ -2083,10 +2309,11 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
       type: "hysteria2",
       tag: proxy.name,
       server: proxy.server,
-      server_port: proxy.port,
+      server_port: proxy.ports ? undefined : proxy.port,
+      server_ports: singBoxServerPorts(proxy.ports),
       password: proxy.password,
       obfs: proxy.obfs ? { type: proxy.obfs, password: proxy["obfs-password"] } : undefined,
-      tls: { enabled: true, server_name: proxy.sni, insecure: Boolean(proxy["skip-cert-verify"]) },
+      tls: { enabled: true, server_name: proxy.sni, insecure: Boolean(proxy["skip-cert-verify"]), alpn: singBoxAlpn(proxy.alpn) },
     });
   }
 
@@ -2142,7 +2369,8 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
       server: proxy.server,
       server_port: proxy.port,
       password: proxy.password,
-      tls: { enabled: true, server_name: proxy.sni, insecure: Boolean(proxy["skip-cert-verify"]) },
+      tls: singBoxTls(proxy, proxy.sni || proxy.servername, { utls: "when-set", forceEnabled: true }),
+      transport: singBoxTransport(proxy),
     });
   }
 
@@ -2206,19 +2434,69 @@ function toSingBoxOutbound(proxy: ProxyNode): SingBoxOutbound | undefined {
       uuid: proxy.uuid,
       security: proxy.cipher || "auto",
       alter_id: proxy.alterId,
-      tls: proxy.tls ? { enabled: true, server_name: proxy.servername } : undefined,
-      transport:
-        proxy.network === "ws"
-          ? {
-              type: "ws",
-              path: (proxy["ws-opts"] as { path?: unknown } | undefined)?.path || "/",
-              headers: (proxy["ws-opts"] as { headers?: unknown } | undefined)?.headers,
-            }
-          : undefined,
+      tls: proxy.tls ? singBoxTls(proxy, proxy.servername, { utls: "when-set" }) : undefined,
+      transport: singBoxTransport(proxy),
     });
   }
 
   return undefined;
+}
+
+/**
+ * Builds a sing-box `tls` block. `utls: "always"` falls back to the chrome fingerprint,
+ * `"when-set"` only emits utls when the node carries a client-fingerprint.
+ */
+function singBoxTls(proxy: ProxyNode, serverName: unknown, options: { utls: "always" | "when-set"; forceEnabled?: boolean }) {
+  const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
+  const fingerprint = proxy["client-fingerprint"] || (options.utls === "always" ? "chrome" : undefined);
+  return stripUndefined({
+    enabled: true,
+    server_name: serverName,
+    insecure: proxy["skip-cert-verify"] ? true : options.forceEnabled ? false : undefined,
+    alpn: singBoxAlpn(proxy.alpn),
+    utls: fingerprint ? { enabled: true, fingerprint } : undefined,
+    reality: realityOpts
+      ? stripUndefined({ enabled: true, public_key: realityOpts["public-key"], short_id: realityOpts["short-id"] })
+      : undefined,
+  });
+}
+
+function singBoxAlpn(value: unknown) {
+  const list = Array.isArray(value) ? value.map(String).filter(Boolean) : stringSetting(value) ? [stringSetting(value)] : [];
+  return list.length > 0 ? list : undefined;
+}
+
+/** sing-box `network` only accepts tcp/udp, so ws/grpc/h2 are expressed as a `transport` block instead. */
+function singBoxTransport(proxy: ProxyNode) {
+  if (proxy.network === "ws") {
+    const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown>; "v2ray-http-upgrade"?: unknown } | undefined;
+    const host = wsHeaderHost(wsOpts);
+    if (wsOpts?.["v2ray-http-upgrade"]) {
+      return stripUndefined({ type: "httpupgrade", path: wsOpts.path || "/", host });
+    }
+    const headers = wsOpts?.headers && Object.keys(wsOpts.headers).length > 0 ? wsOpts.headers : undefined;
+    return stripUndefined({ type: "ws", path: wsOpts?.path || "/", headers });
+  }
+  if (proxy.network === "grpc") {
+    const grpcOpts = proxy["grpc-opts"] as Record<string, unknown> | undefined;
+    return stripUndefined({ type: "grpc", service_name: grpcOpts?.["grpc-service-name"] });
+  }
+  if (proxy.network === "h2") {
+    const h2Opts = proxy["h2-opts"] as { path?: unknown; host?: unknown } | undefined;
+    const hosts = Array.isArray(h2Opts?.host) ? h2Opts.host.map(String) : h2Opts?.host ? [String(h2Opts.host)] : undefined;
+    return stripUndefined({ type: "http", path: h2Opts?.path || "/", host: hosts });
+  }
+  return undefined;
+}
+
+/** Mihomo port-hopping lists use "-" ranges; sing-box expects "start:end" entries. */
+function singBoxServerPorts(value: unknown) {
+  const list = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => (item.includes("-") ? item.replace("-", ":") : `${item}:${item}`));
+  return list.length > 0 ? list : undefined;
 }
 
 function isSingBoxOutbound(input: SingBoxOutbound | undefined): input is SingBoxOutbound {
@@ -2237,12 +2515,15 @@ function toProxyUri(proxy: ProxyNode) {
     params.set("security", realityOpts ? "reality" : proxy.tls ? "tls" : "none");
     if (proxy.servername) params.set("sni", String(proxy.servername));
     if (proxy["client-fingerprint"]) params.set("fp", String(proxy["client-fingerprint"]));
+    const alpn = formatAlpn(proxy.alpn);
+    if (alpn) params.set("alpn", alpn);
+    if (proxy["skip-cert-verify"]) params.set("allowInsecure", "1");
     if (realityOpts?.["public-key"]) params.set("pbk", String(realityOpts["public-key"]));
     if (realityOpts?.["short-id"]) params.set("sid", String(realityOpts["short-id"]));
     if (realityOpts?.["public-key"]) params.set("spx", String(realityOpts["spider-x"] || "/"));
-    params.set("type", String(proxy.network || "tcp"));
+    setUriTransportParams(params, proxy);
     if (proxy.flow) params.set("flow", String(proxy.flow));
-    return `vless://${encodeURIComponent(String(proxy.uuid))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    return `vless://${encodeURIComponent(String(proxy.uuid))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "hysteria2") {
@@ -2251,7 +2532,12 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy["skip-cert-verify"]) params.set("insecure", "1");
     if (proxy.obfs) params.set("obfs", String(proxy.obfs));
     if (proxy["obfs-password"]) params.set("obfs-password", String(proxy["obfs-password"]));
-    return `hysteria2://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    const alpn = formatAlpn(proxy.alpn);
+    if (alpn) params.set("alpn", alpn);
+    if (proxy.ports) params.set("mport", String(proxy.ports));
+    // "user:pass" is a single auth string, so the separator stays a literal colon.
+    const auth = String(proxy.password).split(":").map(encodeURIComponent).join(":");
+    return `hysteria2://${auth}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "hysteria") {
@@ -2263,7 +2549,7 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy.down) params.set("down", String(proxy.down));
     if (proxy.obfs) params.set("obfs", String(proxy.obfs));
     if (proxy["obfs-password"]) params.set("obfs-password", String(proxy["obfs-password"]));
-    return `hysteria://${encodeURIComponent(String(proxy.auth_str || ""))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    return `hysteria://${encodeURIComponent(String(proxy.auth_str || ""))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "anytls") {
@@ -2271,7 +2557,7 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy.sni || proxy.servername) params.set("sni", String(proxy.sni || proxy.servername));
     if (proxy["skip-cert-verify"]) params.set("insecure", "1");
     if (proxy["client-fingerprint"]) params.set("fp", String(proxy["client-fingerprint"]));
-    return `anytls://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    return `anytls://${encodeURIComponent(String(proxy.password))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "tuic") {
@@ -2282,14 +2568,18 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy["reduce-rtt"]) params.set("reduce_rtt", "1");
     if (proxy["udp-relay-mode"]) params.set("udp_relay_mode", String(proxy["udp-relay-mode"]));
     if (proxy["congestion-controller"]) params.set("congestion_control", String(proxy["congestion-controller"]));
-    return `tuic://${encodeURIComponent(String(proxy.uuid))}:${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    return `tuic://${encodeURIComponent(String(proxy.uuid))}:${encodeURIComponent(String(proxy.password))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "trojan") {
     const params = new URLSearchParams();
     if (proxy.sni) params.set("sni", String(proxy.sni));
     if (proxy["skip-cert-verify"]) params.set("allowInsecure", "1");
-    return `trojan://${encodeURIComponent(String(proxy.password))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    const alpn = formatAlpn(proxy.alpn);
+    if (alpn) params.set("alpn", alpn);
+    if (proxy["client-fingerprint"]) params.set("fp", String(proxy["client-fingerprint"]));
+    if (proxy.network && proxy.network !== "tcp") setUriTransportParams(params, proxy);
+    return `trojan://${encodeURIComponent(String(proxy.password))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "socks5") {
@@ -2297,18 +2587,20 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy.tls) params.set("tls", "1");
     const auth = proxy.username ? `${encodeURIComponent(String(proxy.username))}:${encodeURIComponent(String(proxy.password || ""))}@` : "";
     const scheme = proxy.tls ? "socks5+tls" : "socks5";
-    return `${scheme}://${auth}${proxy.server}:${proxy.port}${params.size > 0 ? `?${params.toString()}` : ""}#${encodeURIComponent(proxy.name)}`;
+    return `${scheme}://${auth}${formatUriHost(proxy.server)}:${proxy.port}${params.size > 0 ? `?${params.toString()}` : ""}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "http") {
     const auth = proxy.username ? `${encodeURIComponent(String(proxy.username))}:${encodeURIComponent(String(proxy.password || ""))}@` : "";
     const scheme = proxy.tls ? "https" : "http";
-    return `${scheme}://${auth}${proxy.server}:${proxy.port}#${encodeURIComponent(proxy.name)}`;
+    return `${scheme}://${auth}${formatUriHost(proxy.server)}:${proxy.port}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "ss") {
-    const userInfo = base64Utf8(`${proxy.cipher}:${proxy.password}@${proxy.server}:${proxy.port}`);
-    return `ss://${userInfo}#${encodeURIComponent(proxy.name)}`;
+    // SIP002: base64url(method:password)@host:port/?plugin=...#name
+    const userInfo = encodeBase64UrlText(`${proxy.cipher}:${proxy.password}`);
+    const plugin = shadowsocksPluginParam(proxy);
+    return `ss://${userInfo}@${formatUriHost(proxy.server)}:${proxy.port}${plugin ? `/?plugin=${encodeURIComponent(plugin)}` : ""}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "ssr") {
@@ -2334,11 +2626,11 @@ function toProxyUri(proxy: ProxyNode) {
     if (proxy["public-key"]) params.set("public-key", String(proxy["public-key"]));
     if (proxy["pre-shared-key"]) params.set("pre-shared-key", String(proxy["pre-shared-key"]));
     if (proxy.reserved) params.set("reserved", String(proxy.reserved));
-    return `wireguard://${encodeURIComponent(String(proxy["private-key"] || ""))}@${proxy.server}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
+    return `wireguard://${encodeURIComponent(String(proxy["private-key"] || ""))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 
   if (proxy.type === "vmess") {
-    const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: { Host?: unknown } } | undefined;
+    const transport = vmessTransportFields(proxy);
     return `vmess://${base64Utf8(
       JSON.stringify({
         v: "2",
@@ -2350,14 +2642,75 @@ function toProxyUri(proxy: ProxyNode) {
         scy: proxy.cipher || "auto",
         tls: proxy.tls ? "tls" : "",
         sni: proxy.servername || "",
-        net: proxy.network || "tcp",
+        alpn: formatAlpn(proxy.alpn),
+        fp: proxy.tls ? String(proxy["client-fingerprint"] || "") : "",
         type: "none",
-        host: wsOpts?.headers?.Host || "",
-        path: wsOpts?.path || "",
+        ...transport,
       }),
     )}`;
   }
 
+  return undefined;
+}
+
+/** Writes the `type`/`path`/`host`/`serviceName` URI parameters for vless and trojan links. */
+function setUriTransportParams(params: URLSearchParams, proxy: ProxyNode) {
+  const network = String(proxy.network || "tcp");
+  if (network === "ws") {
+    const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown>; "v2ray-http-upgrade"?: unknown } | undefined;
+    params.set("type", wsOpts?.["v2ray-http-upgrade"] ? "httpupgrade" : "ws");
+    if (wsOpts?.path) params.set("path", String(wsOpts.path));
+    const host = wsHeaderHost(wsOpts);
+    if (host) params.set("host", String(host));
+  } else if (network === "grpc") {
+    const grpcOpts = proxy["grpc-opts"] as Record<string, unknown> | undefined;
+    params.set("type", "grpc");
+    if (grpcOpts?.["grpc-service-name"]) params.set("serviceName", String(grpcOpts["grpc-service-name"]));
+  } else if (network === "h2") {
+    const h2Opts = proxy["h2-opts"] as { path?: unknown; host?: unknown } | undefined;
+    params.set("type", "h2");
+    if (h2Opts?.path) params.set("path", String(h2Opts.path));
+    const host = Array.isArray(h2Opts?.host) ? h2Opts.host.join(",") : h2Opts?.host;
+    if (host) params.set("host", String(host));
+  } else {
+    params.set("type", network);
+  }
+}
+
+/** Maps the transport options of a vmess node onto the vmess:// JSON `net`/`host`/`path` fields. */
+function vmessTransportFields(proxy: ProxyNode) {
+  const network = String(proxy.network || "tcp");
+  if (network === "ws") {
+    const wsOpts = proxy["ws-opts"] as { path?: unknown; headers?: Record<string, unknown>; "v2ray-http-upgrade"?: unknown } | undefined;
+    return { net: wsOpts?.["v2ray-http-upgrade"] ? "httpupgrade" : "ws", host: wsHeaderHost(wsOpts) || "", path: wsOpts?.path || "" };
+  }
+  if (network === "grpc") {
+    const grpcOpts = proxy["grpc-opts"] as Record<string, unknown> | undefined;
+    return { net: "grpc", host: "", path: grpcOpts?.["grpc-service-name"] || "" };
+  }
+  if (network === "h2") {
+    const h2Opts = proxy["h2-opts"] as { path?: unknown; host?: unknown } | undefined;
+    return { net: "h2", host: Array.isArray(h2Opts?.host) ? h2Opts.host.join(",") : h2Opts?.host || "", path: h2Opts?.path || "" };
+  }
+  return { net: network, host: "", path: "" };
+}
+
+/** Serializes ss plugin settings into the SIP002 `plugin` query value. */
+function shadowsocksPluginParam(proxy: ProxyNode) {
+  const pluginOpts = proxy["plugin-opts"] as Record<string, unknown> | undefined;
+  if (!proxy.plugin || !pluginOpts) return undefined;
+  if (proxy.plugin === "obfs") {
+    return ["obfs-local", pluginOpts.mode ? `obfs=${pluginOpts.mode}` : "", pluginOpts.host ? `obfs-host=${pluginOpts.host}` : ""].filter(Boolean).join(";");
+  }
+  if (proxy.plugin === "v2ray-plugin") {
+    return [
+      "v2ray-plugin",
+      pluginOpts.mode ? `mode=${pluginOpts.mode}` : "",
+      pluginOpts.tls ? "tls" : "",
+      pluginOpts.host ? `host=${pluginOpts.host}` : "",
+      pluginOpts.path ? `path=${pluginOpts.path}` : "",
+    ].filter(Boolean).join(";");
+  }
   return undefined;
 }
 
@@ -2385,7 +2738,35 @@ function stripUndefined<T extends Record<string, unknown>>(input: T) {
 }
 
 function boolParam(value: string | null) {
-  return value === "1" || value === "true";
+  const normalized = value?.toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
+function insecureParam(params: URLSearchParams) {
+  return boolParam(params.get("allowInsecure") || params.get("insecure")) || undefined;
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function uriName(url: URL, fallback: string) {
+  return safeDecodeURIComponent(url.hash.slice(1) || fallback);
+}
+
+/** `URL.hostname` keeps the brackets of IPv6 literals; proxy configs need the bare address. */
+function uriHostname(url: URL) {
+  return url.hostname.replace(/^\[(.*)\]$/, "$1");
+}
+
+/** Adds the brackets IPv6 literals need inside `host:port` strings and URIs. */
+function formatUriHost(server: unknown) {
+  const host = String(server ?? "");
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
 function commaList(value: string | null) {
@@ -2415,7 +2796,8 @@ function base64Utf8(input: string) {
 }
 
 function decodeBase64UrlText(input: string) {
-  const padded = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(input.length / 4) * 4, "=");
+  const normalized = input.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/g, "");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   try {
     const binary = atob(padded);
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));

@@ -92,16 +92,20 @@ export async function applyScriptAction(
   }
 }
 
+export function isIPv4(value: unknown) {
+  const parts = String(value || "").split(".");
+  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
+
+export function isIPv6(value: unknown) {
+  return String(value || "").includes(":") && /^[0-9a-f:]+$/i.test(String(value || ""));
+}
+
 const PROXY_UTILS = Object.freeze({
-  isIPv4(value: unknown) {
-    const parts = String(value || "").split(".");
-    return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
-  },
-  isIPv6(value: unknown) {
-    return String(value || "").includes(":") && /^[0-9a-f:]+$/i.test(String(value || ""));
-  },
+  isIPv4,
+  isIPv6,
   isIP(value: unknown) {
-    return PROXY_UTILS.isIPv4(value) || PROXY_UTILS.isIPv6(value);
+    return isIPv4(value) || isIPv6(value);
   },
   removeFlag(value: unknown) {
     return String(value || "").replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, "").trim();

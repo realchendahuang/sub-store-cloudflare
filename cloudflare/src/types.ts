@@ -178,7 +178,10 @@ export type TemplateRecord = {
   updatedAt: number;
 };
 
-export type AppSettings = Record<string, unknown>;
+export type AppSettings = Record<string, unknown> & {
+  /** Per-request subrequest budget (default 45, clamped to 10..1000). Raise on paid Workers plans. */
+  subrequestLimit?: number;
+};
 
 export type AppConfig = {
   sources: SourceRecord[];
