@@ -21,7 +21,7 @@ English: [README.en.md](README.en.md)
 使用密码管理器生成，或者在安装了 Node.js 的电脑运行：
 
 ```bash
-node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
+node --input-type=module -e "import{randomBytes as r}from'node:crypto';console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
 ```
 
 第一行用于 `SUB_STORE_ADMIN_TOKEN`，第二行用于 `SUB_STORE_PUBLIC_DOWNLOAD_TOKEN`。不要使用 README、截图或示例里的固定字符串。
@@ -43,7 +43,7 @@ node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString(
 部署成功后点击 Cloudflare 给出的 Worker 地址，并在地址后添加：
 
 ```text
-/?token=<SUB_STORE_ADMIN_TOKEN>
+/#token=<SUB_STORE_ADMIN_TOKEN>
 ```
 
 首次进入会显示三步引导：添加 Source → 确认默认 Daily → 复制订阅链接。
@@ -149,7 +149,7 @@ pnpm run dev
 访问：
 
 ```text
-http://localhost:8787/?token=dev-admin-token
+http://localhost:8787/#token=dev-admin-token
 ```
 
 ## 隐私与安全

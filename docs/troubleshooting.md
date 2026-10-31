@@ -32,7 +32,7 @@ pnpm --dir cloudflare exec wrangler whoami
 跨平台生成随机值：
 
 ```bash
-node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
+node --input-type=module -e "import{randomBytes as r}from'node:crypto';console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
 ```
 
 ## 没有 Cloudflare 账号

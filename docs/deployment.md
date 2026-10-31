@@ -28,7 +28,7 @@ Cloudflare 会读取根目录 [../wrangler.jsonc](../wrangler.jsonc)，自动 pr
 跨平台生成两个 token：
 
 ```bash
-node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
+node --input-type=module -e "import{randomBytes as r}from'node:crypto';console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
 ```
 
 第一行用于 admin token，第二行用于 download token。两个值必须不同。仓库根目录不提供 `.dev.vars.example`，避免 Cloudflare 部署表单把公开占位字符串当作 Secret 默认值。
@@ -36,7 +36,7 @@ node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString(
 部署后进入：
 
 ```text
-https://<worker>.<workers-subdomain>.workers.dev/?token=<admin-token>
+https://<worker>.<workers-subdomain>.workers.dev/#token=<admin-token>
 ```
 
 前端读取管理 token 后会立即从地址栏移除它，后续 API 请求使用 `Authorization` 请求头。
@@ -238,7 +238,7 @@ SUB_STORE_PUBLIC_DOWNLOAD_TOKEN=dev-download-token
 访问：
 
 ```text
-http://localhost:8787/?token=dev-admin-token
+http://localhost:8787/#token=dev-admin-token
 ```
 
 ## 7. 下载链接
@@ -246,7 +246,7 @@ http://localhost:8787/?token=dev-admin-token
 管理界面：
 
 ```text
-https://substore.example.com/?token=<admin-token>
+https://substore.example.com/#token=<admin-token>
 ```
 
 下载链接：

@@ -18,7 +18,7 @@
 使用密码管理器生成两个至少 32 字节的随机值，或者运行：
 
 ```bash
-node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
+node --input-type=module -e "import{randomBytes as r}from'node:crypto';console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
 ```
 
 - 第一行：`SUB_STORE_ADMIN_TOKEN`

@@ -311,7 +311,7 @@ function printResult({ baseUrl, adminToken, downloadToken, workerName, d1Databas
   banner("Deployment result");
   console.log(`Worker: ${workerName}`);
   console.log(`D1: ${d1DatabaseName}`);
-  console.log(`Admin URL: ${baseUrl}/?token=${adminToken}`);
+  console.log(`Admin URL: ${baseUrl}/#token=${adminToken}`);
   console.log("");
   console.log("Download URLs:");
   for (const collection of collections) {

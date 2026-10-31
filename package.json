@@ -45,7 +45,7 @@
     "check:frontend": "pnpm --dir frontend run check:locales && pnpm run build:frontend",
     "check": "pnpm run check:worker && pnpm run check:frontend",
     "check:deploy-config": "node scripts/check-deploy-config.mjs",
-    "deploy": "pnpm run scripts:generate && pnpm run db:migrations:apply && pnpm --dir cloudflare exec wrangler deploy --config ../wrangler.jsonc",
+    "deploy": "pnpm run build && pnpm run db:migrations:apply && pnpm --dir cloudflare exec wrangler deploy --config ../wrangler.jsonc",
     "deploy:dry-run": "pnpm run scripts:generate && pnpm run build:frontend && pnpm --dir cloudflare exec wrangler deploy --dry-run --config ../wrangler.jsonc",
     "deploy:local": "pnpm run scripts:generate && pnpm run build:frontend && pnpm run check:deploy-config -- --required && pnpm --dir cloudflare exec wrangler deploy --config wrangler.deploy.local.jsonc",
     "deploy:local:dry-run": "pnpm run scripts:generate && pnpm run check && pnpm run check:deploy-config -- --required && pnpm --dir cloudflare exec wrangler deploy --dry-run --config wrangler.deploy.local.jsonc",

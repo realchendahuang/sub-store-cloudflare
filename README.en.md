@@ -21,7 +21,7 @@ Chinese is the primary documentation language: [README.md](README.md).
 Use a password manager, or run this cross-platform Node.js command:
 
 ```bash
-node -e "const{randomBytes:r}=require('node:crypto');console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
+node --input-type=module -e "import{randomBytes as r}from'node:crypto';console.log(r(32).toString('base64url'));console.log(r(32).toString('base64url'))"
 ```
 
 Use the first line for `SUB_STORE_ADMIN_TOKEN` and the second for `SUB_STORE_PUBLIC_DOWNLOAD_TOKEN`. Never deploy fixed values copied from documentation or screenshots.
@@ -37,7 +37,7 @@ Both secret fields must contain the different random values you generated.
 Open the Worker URL returned by Cloudflare and append:
 
 ```text
-/?token=<SUB_STORE_ADMIN_TOKEN>
+/#token=<SUB_STORE_ADMIN_TOKEN>
 ```
 
 The first-run screen guides you through Source → default Daily collection → client download link.
@@ -129,6 +129,6 @@ pnpm run build:frontend
 pnpm run dev
 ```
 
-Open `http://localhost:8787/?token=dev-admin-token`.
+Open `http://localhost:8787/#token=dev-admin-token`.
 
 Never commit subscription URLs, node URIs, tokens, private D1 IDs, or generated seed SQL. See [SECURITY.md](SECURITY.md), [LICENSE](LICENSE), and [NOTICE](NOTICE).
