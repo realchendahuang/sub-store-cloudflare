@@ -5,7 +5,6 @@ interface GlobalStoreState {
   fetchResult: boolean;
   isDarkMode: boolean;
   env: ENV;
-  isDockerDeployment: boolean;
   isSimpleMode: boolean;
   isLeftRight: boolean;
   isIconColor: boolean;

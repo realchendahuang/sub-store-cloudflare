@@ -1339,7 +1339,7 @@ const submit = () => {
     if (configName === "UNTITLED") {
       res = await cloudflareApi.createItem(editType, data);
       await subsStore.fetchSubsData();
-      if (data.source === "remote") await initStores(false, true, false);
+      if (data.source === "remote") await initStores(false, true, { forceFlows: true });
     } else {
       let apiType = "";
       if (editType === "subs") {

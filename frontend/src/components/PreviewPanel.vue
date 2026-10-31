@@ -47,13 +47,14 @@
 <script lang="ts" setup>
   import logoIcon from '@/assets/icons/logo.png';
   import { useClipboard } from '@vueuse/core';
+  import axios from 'axios';
   import useV3Clipboard from 'vue-clipboard3';
   import { useAppNotifyStore } from '@/store/appNotify';
   import SvgIcon from '@/components/SvgIcon.vue';
   import { useHostAPI } from '@/hooks/useHostAPI';
   import { storeToRefs } from "pinia";
   import { useSettingsStore } from '@/store/settings';
-  import { useCloudflareApi } from '@/api/app';
+  import { getDownloadLink } from '@/utils/downloadLink';
   import { DOWNLOAD_TARGET_OPTIONS } from '@/constants/subscriptionTargets';
   import { useI18n } from 'vue-i18n';
 
@@ -83,7 +84,6 @@
   }>();
 
   const { currentUrl: host } = useHostAPI();
-  const cloudflareApi = useCloudflareApi();
 
   type PlatformPath = string | null;
 
@@ -131,15 +131,25 @@
   }
   const getRealUrl = async (path: PlatformPath) => {
     if (url) return getUrl(path);
-    const res = await cloudflareApi.getDownloadLink(type, name, path || undefined);
-    const realUrl = res?.data?.status === 'success' && res.data.data?.url
-      ? res.data.data.url
-      : getUrl(path);
-    return realUrl;
+    // 失败时抛出异常，不回退到不带下载 token 的链接
+    return getDownloadLink(type, name, path || undefined);
+  };
+  const notifyLinkFailed = (e: unknown) => {
+    // HTTP 错误已由请求拦截器提示，这里只补充后端未返回链接的情况
+    if (!axios.isAxiosError(e)) {
+      showNotify({ type: 'danger', title: t('subPage.copyNotify.linkFailed') });
+    }
   };
   const targetOpen = async (path: PlatformPath) => {
     const pendingWindow = window.open('about:blank', '_blank');
-    const realUrl = await getRealUrl(path);
+    let realUrl: string;
+    try {
+      realUrl = await getRealUrl(path);
+    } catch (e) {
+      pendingWindow?.close();
+      notifyLinkFailed(e);
+      return;
+    }
     const nextUrl = appearanceSetting.value.displayPreviewInWebPage
         ? buildUrlWithQuery('/preview', {
             url: realUrl,
@@ -156,7 +166,13 @@
     window.open(nextUrl, '_blank');
   };
   const targetCopy = async (path: PlatformPath) => {
-    const url = await getRealUrl(path);
+    let url: string;
+    try {
+      url = await getRealUrl(path);
+    } catch (e) {
+      notifyLinkFailed(e);
+      return;
+    }
     if (isSupported) {
       await copy(url);
     } else {

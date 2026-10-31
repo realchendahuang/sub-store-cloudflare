@@ -11,7 +11,9 @@
       class="sub-item-wrapper"
       :class="{ 'is-dual-column': props.isDualColumn }"
       :style="{ padding: itemPadding }"
+      tabindex="0"
       @click="handleContentClick"
+      @keydown.enter.self="handleContentClick"
     >
       <div
         v-if="
@@ -26,7 +28,11 @@
       <div
         class="sub-img-wrappers"
         :style="{ 'margin-top': imageMarginTop }"
+        :role="appearanceSetting.isShowIcon ? 'button' : undefined"
+        :tabindex="appearanceSetting.isShowIcon ? 0 : undefined"
+        :aria-label="appearanceSetting.isShowIcon ? t('subPage.actions.preview') : undefined"
         @click.stop="compareSub"
+        @keydown.enter.self.stop="compareSub"
       >
         <!-- icon visible -->
         <div v-if="appearanceSetting.isShowIcon">
@@ -370,6 +376,7 @@
 <script lang="ts" setup>
 import { Dialog, Toast } from "@nutui/nutui";
 import { useClipboard } from "@vueuse/core";
+import axios from "axios";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
 import { computed, ref, toRaw } from "vue";
@@ -381,12 +388,12 @@ import { useCloudflareApi } from "@/api/app";
 import logoIcon from "@/assets/icons/logo.png";
 import logoRedIcon from "@/assets/icons/logo-red.png";
 import PreviewPanel from "@/components/PreviewPanel.vue";
-import { useHostAPI } from "@/hooks/useHostAPI";
 import { usePopupRoute } from "@/hooks/usePopupRoute";
 import { useAppNotifyStore } from "@/store/appNotify";
 import { useGlobalStore } from "@/store/global";
 import { useSettingsStore } from "@/store/settings";
 import { useSubsStore } from "@/store/subs";
+import { getDownloadLink } from "@/utils/downloadLink";
 import { getString } from "@/utils/flowTransfer";
 import { isMobile } from "@/utils/isMobile";
 import CompareTable from "@/views/CompareTable.vue";
@@ -431,7 +438,6 @@ const {
   // subProgressStyle,
 } = storeToRefs(globalStore);
 const { showNotify } = useAppNotifyStore();
-const { currentUrl: host } = useHostAPI();
 
 const displayName =
   props[props.type].displayName || props[props.type]["display-name"] || props[props.type].name;
@@ -936,13 +942,22 @@ const onClickDelete = () => {
   });
 };
 
+// 获取带下载 token 的链接；失败时提示错误，不回退到不带 token 的链接
+const resolveDownloadLink = async () => {
+  try {
+    return await getDownloadLink(props.type, name);
+  } catch (e) {
+    // HTTP 错误已由请求拦截器提示，这里只补充后端未返回链接的情况
+    if (!axios.isAxiosError(e)) {
+      showNotify({ type: "danger", title: t("subPage.copyNotify.linkFailed") });
+    }
+    return undefined;
+  }
+};
+
 const onClickCopyLink = async () => {
-  const res = await cloudflareApi.getDownloadLink(props.type, name);
-  const url = res?.data?.status === "success" && res.data.data?.url
-    ? res.data.data.url
-    : `${host.value}/download/${
-      props.type === "collection" ? "collection/" : "source/"
-    }${encodeURIComponent(name)}`;
+  const url = await resolveDownloadLink();
+  if (!url) return;
 
   if (isSupported) {
     await copy(url);
@@ -953,12 +968,9 @@ const onClickCopyLink = async () => {
 };
 
 const onClickOpenDownload = async () => {
-  const res = await cloudflareApi.getDownloadLink(props.type, name);
-  const url = res?.data?.status === "success" && res.data.data?.url
-    ? res.data.data.url
-    : `${host.value}/download/${
-      props.type === "collection" ? "collection/" : "source/"
-    }${encodeURIComponent(name)}`;
+  const url = await resolveDownloadLink();
+  if (!url) return;
+
   window.open(url, "_blank");
   closeExpandedMenu();
 };
@@ -973,15 +985,15 @@ const onClickRefresh = async () => {
   } catch (e) {
     console.error(e);
   }
-  await refreshSubFlowsIfNeeded()
+  await refreshSubFlowsIfNeeded(true)
   Toast.hide("refresh");
   showNotify({ title: t("globalNotify.refresh.succeed") });
 };
 
-const refreshSubFlowsIfNeeded = async () => {
+const refreshSubFlowsIfNeeded = async (force = false) => {
   if (!props.sub) return
   try {
-    await subsStore.fetchFlows([props.sub])
+    await subsStore.fetchFlows([props.sub], { force })
   } catch (e) {
     console.error(e)
   }

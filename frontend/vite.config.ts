@@ -11,10 +11,12 @@ const version = JSON.parse(
   readFileSync(join(projectRoot, "package.json"), "utf-8")
 ).version.trim();
 
-const alias: Record<string, string> = {
-  "@": resolve(projectRoot, "src"),
-  vue: "vue/dist/vue.esm-bundler.js",
-};
+// 仅运行时（无模板编译器）的 Vue 构建。项目没有运行时字符串模板；
+// 精确匹配 "vue"，让 UMD 依赖（如 vuedraggable）也解析到同一份 ESM 运行时，避免打入第二份 Vue。
+const alias = [
+  { find: "@", replacement: resolve(projectRoot, "src") },
+  { find: /^vue$/, replacement: "vue/dist/vue.runtime.esm-bundler.js" },
+];
 
 const htmlPlugin = () => {
   return {
@@ -66,8 +68,7 @@ const viteConfig = defineConfig((mode: ConfigEnv) => {
       outDir: "dist",
       sourcemap: false,
       assetsInlineLimit: 2048,
-      chunkSizeWarningLimit: 2048,
-      target: "es2015",
+      target: "es2020",
       minify: "terser",
       input: {
         main: "src/main.ts",
@@ -90,9 +91,9 @@ const viteConfig = defineConfig((mode: ConfigEnv) => {
                 id.includes('/codemirror/') ||
                 id.includes('@codemirror/') ||
                 id.includes('@lezer/') ||
-                id.includes('@replit/codemirror') ||
-                id.includes('js-beautify')
+                id.includes('@replit/codemirror')
               ) return 'editor';
+              if (id.includes('js-beautify')) return 'beautify';
               if (id.includes('vue-i18n') || id.includes('@intlify/')) return 'i18n';
               if (id.includes('@fortawesome/')) return 'icons';
               if (id.includes('/vue/') || id.includes('/vue-router/') || id.includes('/pinia/') || id.includes('@vue/') || id.includes('@vueuse/')) return 'vue-vendor';

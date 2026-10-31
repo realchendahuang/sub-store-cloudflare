@@ -80,7 +80,6 @@ import jsimg from "@/views/editCode/svg/jsimg.svg";
 import { useSettingsStore } from "@/store/settings";
 import { useCodeStore } from "@/store/codeStore";
 import { storeToRefs } from "pinia";
-import beautify from "js-beautify";
 import { useAppNotifyStore } from "@/store/appNotify";
 const { toClipboard } = useV3Clipboard();
 const { showNotify } = useAppNotifyStore();
@@ -297,6 +296,7 @@ const redoCode = () => redo(view);
 
 async function formatCode() {
   try {
+    const { default: beautify } = await import("js-beautify");
     cmStore.setEditCode(
       [props.id],
       beautify

@@ -44,6 +44,19 @@
       <p class="card-desc">{{ t("myPage.backup.desc") }}</p>
     </section>
 
+    <section class="config-card storage-card">
+      <div class="title-wrapper">
+        <h1>{{ t("myPage.session.title") }}</h1>
+        <div class="storage-actions">
+          <nut-button plain type="danger" size="small" @click="confirmLogout">
+            <font-awesome-icon icon="fa-solid fa-right-from-bracket" />
+            {{ t("myPage.session.logout") }}
+          </nut-button>
+        </div>
+      </div>
+      <p class="card-desc">{{ t("myPage.session.desc") }}</p>
+    </section>
+
     <section class="config-card">
       <div class="title-wrapper">
         <h1>{{ t("myPage.templates.title") }}</h1>
@@ -155,6 +168,7 @@
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
 import { Dialog } from "@nutui/nutui";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 
 import { useCloudflareApi } from "@/api/app";
 import LanguageSwitcherButton from "@/components/LanguageSwitcherButton.vue";
@@ -164,6 +178,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { useAppNotifyStore } from "@/store/appNotify";
 import { useCodeStore } from "@/store/codeStore";
 import { useSettingsStore } from "@/store/settings";
+import { resetToTokenEntry } from "@/utils/session";
 import { TEMPLATE_TARGET_OPTIONS, getTargetLabel } from "@/constants/subscriptionTargets";
 
 const CmView = defineAsyncComponent(() => import("@/views/editCode/cmView.vue"));
@@ -174,6 +189,7 @@ const cloudflareApi = useCloudflareApi();
 const cmStore = useCodeStore();
 const { showNotify } = useAppNotifyStore();
 const { t } = useI18n();
+const router = useRouter();
 const { icon, env } = useBackend();
 const TEMPLATE_EDITOR_ID = "TemplateEditor";
 
@@ -255,6 +271,20 @@ const saveRequestSettings = async () => {
   } finally {
     requestSaving.value = false;
   }
+};
+
+const confirmLogout = () => {
+  Dialog({
+    title: t("myPage.session.confirmTitle"),
+    content: t("myPage.session.confirmContent"),
+    popClass: "auto-dialog",
+    okText: t("myPage.session.logout"),
+    cancelText: t("myPage.btn.cancel"),
+    closeOnClickOverlay: true,
+    onOk: async () => {
+      await resetToTokenEntry(router);
+    },
+  });
 };
 
 const selectBackupFile = () => {

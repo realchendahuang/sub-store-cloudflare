@@ -25,7 +25,8 @@ export default {
       failedStatusOnly: "Request failed: {status}",
       failed: "Request failed",
       network: "Network error or backend unavailable\n",
-      noResponse: "No response received"
+      noResponse: "No response received",
+      unauthorized: "The admin token is invalid or expired. Please enter it again."
     }
   },
   navBar: {
@@ -195,7 +196,8 @@ export default {
     },
     copyNotify: {
       succeed: "Successfully copied link!",
-      failed: "Failed to copy subscription link!\n{e}"
+      failed: "Failed to copy subscription link!\n{e}",
+      linkFailed: "Failed to get the subscription link. Please try again later."
     },
     copyConfigNotify: {
       loading: "Cloning...",
@@ -720,6 +722,13 @@ export default {
       restore: "Restore",
       restoreTitle: "Restore backup",
       restoreContent: "Restoring will overwrite sources, collections, rule templates, and settings with the same names. Export a current backup first."
+    },
+    session: {
+      title: "Admin Token",
+      desc: "Logging out clears the admin token stored in this browser and returns to the token entry screen.",
+      logout: "Log out",
+      confirmTitle: "Log out",
+      confirmContent: "This clears the admin token stored in this browser. You will need to enter it again. Continue?"
     },
     templates: {
       title: "Rule Templates",

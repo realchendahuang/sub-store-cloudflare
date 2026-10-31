@@ -5,7 +5,12 @@
         <div 
           class="menu-item" 
           :class="{ active: activeTab === 0 }" 
+          role="button"
+          tabindex="0"
+          :aria-label="$t('tabBar.sub')"
+          :aria-current="activeTab === 0 ? 'page' : undefined"
           @click="router.push('/subs')"
+          @keydown.enter="router.push('/subs')"
         >
           <nut-icon name="link" size="22px" />
           <span class="label" v-show="isExpanded">{{ $t('tabBar.sub') }}</span>
@@ -14,7 +19,12 @@
         <div 
           class="menu-item" 
           :class="{ active: activeTab === 1 }" 
+          role="button"
+          tabindex="0"
+          :aria-label="$t('tabBar.tools')"
+          :aria-current="activeTab === 1 ? 'page' : undefined"
           @click="router.push('/tools')"
+          @keydown.enter="router.push('/tools')"
         >
           <nut-icon name="more-x" size="22px" />
           <span class="label" v-show="isExpanded">{{ $t('tabBar.tools') }}</span>
@@ -23,7 +33,12 @@
         <div
           class="menu-item"
           :class="{ active: activeTab === 2 }"
+          role="button"
+          tabindex="0"
+          :aria-label="$t('tabBar.my')"
+          :aria-current="activeTab === 2 ? 'page' : undefined"
           @click="router.push('/my')"
+          @keydown.enter="router.push('/my')"
         >
           <div class="icon-container">
             <nut-icon name="setting" size="22px" />

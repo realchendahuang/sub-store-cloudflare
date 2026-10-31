@@ -16,6 +16,9 @@ import 'vue-router';
 import { createRouter, createWebHistory } from 'vue-router';
 
 let globalStore = null;
+// 路由跳转时检查后端环境的最小间隔，避免每次导航都请求 /api/env
+const ENV_CHECK_INTERVAL = 60 * 1000;
+let lastEnvCheckAt = 0;
 const { t: i18n_global } = i18n.global;
 
 const scrollContainers = ['#app', '.app-layout-wrapper', '.page-body'];
@@ -195,7 +198,8 @@ router.beforeResolve(async (to, from) => {
   // 路由跳转时查询环境，决定是否更新数据
   if (globalStore !== null) {
     const storeEnv = toRaw(globalStore.env);
-    if (storeEnv?.backend && storeEnv?.version) {
+    if (storeEnv?.backend && storeEnv?.version && Date.now() - lastEnvCheckAt >= ENV_CHECK_INTERVAL) {
+      lastEnvCheckAt = Date.now();
       useEnvApi()
       .getEnv()
       .then(async res => {
@@ -208,10 +212,13 @@ router.beforeResolve(async (to, from) => {
               cover: true,
               id: 'fetchLoading',
             });
-            await initStores(false, true, true);
+            await initStores(false, true, { forceFlows: true });
             Toast.hide('fetchLoading');
           }
         }
+      })
+      .catch(() => {
+        // 环境检查失败已由请求拦截器提示，这里不再重复处理
       });
     }
   } else {

@@ -2,10 +2,23 @@ import { useAppNotifyStore } from '@/store/appNotify';
 import axios, { AxiosError } from 'axios';
 import i18n from '@/locales';
 import { getHostAPIUrl } from '@/hooks/useHostAPI';
-import { getStoredAdminToken } from '@/utils/adminToken';
+import { clearStoredAdminToken, getStoredAdminToken } from '@/utils/adminToken';
 import { getApiRequestTimeout } from '@/utils/requestTimeout';
 
 let appNotifyStore = null;
+
+// 401 提示的去重窗口：多个并发请求同时返回 401 时只提示一次
+const UNAUTHORIZED_NOTIFY_INTERVAL = 4000;
+let lastUnauthorizedNotifyAt = 0;
+let unauthorizedHandler: (() => void) | null = null;
+
+/**
+ * 注册 401 处理回调（由应用入口注册，避免 api 层与 store/router 循环依赖）。
+ * 回调负责重置 store 并回到 token 输入界面。
+ */
+export const setUnauthorizedHandler = (handler: (() => void) | null) => {
+  unauthorizedHandler = handler;
+};
 
 const notifyConfig: { type: 'danger'; duration: number } = {
   type: 'danger',
@@ -93,7 +106,6 @@ service.interceptors.request.use(config => {
   const token = getStoredAdminToken();
   if (token) {
     config.headers.set('Authorization', `Bearer ${token}`);
-    config.headers.set('X-Sub-Store-Token', token);
   }
   return config;
 });
@@ -105,6 +117,30 @@ service.interceptors.response.use(
 
     if (isCanceledRequestError(e))
       return Promise.reject(e);
+
+    // token 无效或已过期：清除本地 token，回到 token 输入状态，并只提示一次
+    if (e.response?.status === 401) {
+      // 请求发出后用户已经换了新 token：这是过期请求的 401，忽略，避免清掉新 token
+      const currentToken = getStoredAdminToken();
+      if (currentToken && e.config?.headers?.get?.('Authorization') !== `Bearer ${currentToken}`)
+        return Promise.reject(e);
+
+      clearStoredAdminToken();
+      const now = Date.now();
+      // 没带 token（首次打开）时直接进入 token 输入界面，不弹"未授权"提示
+      const sentToken = Boolean(e.config?.headers?.get?.('Authorization'));
+      if (sentToken && now - lastUnauthorizedNotifyAt >= UNAUTHORIZED_NOTIFY_INTERVAL) {
+        lastUnauthorizedNotifyAt = now;
+        if (!appNotifyStore)
+          appNotifyStore = useAppNotifyStore();
+        appNotifyStore.showNotify({
+          title: i18n.global.t("globalNotify.request.unauthorized"),
+          ...notifyConfig,
+        });
+      }
+      unauthorizedHandler?.();
+      return Promise.reject(e);
+    }
 
     // 流量信息接口的报错,不通知，直接返回
     if (requestUrl.startsWith('/api/source/flow'))

@@ -14,7 +14,9 @@ import '@/assets/styles/reduced-motion-fix.scss';
 import { createPinia } from 'pinia';
 import 'virtual:svg-icons-register';
 import { createApp } from 'vue';
+import { setUnauthorizedHandler } from '@/api';
 import { syncAdminTokenFromUrl } from '@/utils/adminToken';
+import { resetToTokenEntry } from '@/utils/session';
 
 import App from './App.vue';
 
@@ -45,6 +47,10 @@ async function initializeApp() {
   app.use(router);
   app.use(pinia);
   app.use(i18n);
+  // 401：清除 token 并回到 token 输入界面
+  setUnauthorizedHandler(() => {
+    void resetToTokenEntry(router);
+  });
   app.component('font-awesome-icon', FontAwesomeIcon);
   app.component('svg-icon', SvgIcon);
   app.mount('#app');

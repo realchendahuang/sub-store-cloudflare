@@ -1,42 +1,30 @@
 import {
-  ActionSheet,
   Avatar,
-  Badge,
   Button,
-  Cascader,
   Cell,
   CellGroup,
   Checkbox,
   CheckboxGroup,
-  Collapse,
-  CollapseItem,
   Dialog,
   Divider,
   Drag,
-  Ellipsis,
   Empty,
-  FixedNav,
   Form,
   FormItem,
   Icon,
   Input,
   Image,
-  Menu,
-  MenuItem,
   Navbar,
-  Notify,
   OverLay,
   Picker,
   Popover,
   Popup,
   Radio,
   RadioGroup,
-  Sticky,
   Swipe,
   Switch,
   Tabbar,
   TabbarItem,
-  Table,
   TabPane,
   Tabs,
   Tag,
@@ -51,23 +39,17 @@ export default app => {
     .use(Navbar)
     .use(Tabs)
     .use(TabPane)
-    .use(Menu)
-    .use(MenuItem)
     .use(Popup)
     .use(OverLay)
     .use(Cell)
     .use(CellGroup)
     .use(Tabbar)
     .use(TabbarItem)
-    .use(FixedNav)
     .use(Drag)
-    .use(ActionSheet)
     .use(Avatar)
-    .use(Notify)
     .use(Empty)
     .use(Swipe)
     .use(Dialog)
-    .use(Ellipsis)
     .use(Form)
     .use(FormItem)
     .use(TextArea)
@@ -78,15 +60,9 @@ export default app => {
     .use(Picker)
     .use(Checkbox)
     .use(CheckboxGroup)
-    .use(Table)
     .use(Toast)
     .use(Divider)
     .use(Tag)
     .use(Input)
-    .use(Image)
-    .use(Cascader)
-    .use(Collapse)
-    .use(CollapseItem)
-    .use(Badge)
-    .use(Sticky);
+    .use(Image);
 };

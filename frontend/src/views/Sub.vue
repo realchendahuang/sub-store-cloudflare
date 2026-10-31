@@ -82,7 +82,11 @@
           <div
             v-if="appearanceSetting.showFloatingRefreshButton"
             class="drag-btn refresh"
+            role="button"
+            tabindex="0"
+            :aria-label="t('navBar.actions.refresh')"
             @click="refresh"
+            @keydown.enter="refresh"
           >
             <font-awesome-icon icon="fa-solid fa-arrow-rotate-right" />
           </div>
@@ -91,9 +95,13 @@
           <div
             v-if="appearanceSetting.showFloatingAddButton"
             class="drag-btn"
+            role="button"
+            tabindex="0"
+            :aria-label="t('navBar.actions.add')"
             @touchmove="onTa"
             @touchend="enTa"
             @click="addSub"
+            @keydown.enter="addSub"
           >
             <font-awesome-icon icon="fa-solid fa-plus" />
           </div>
@@ -107,7 +115,17 @@
       <div v-if="tags && tags.length > 0" ref="radioWrapperRef" class="radio-wrapper" >
         <!-- <nut-radiogroup v-model="tag" direction="horizontal"> -->
           <!-- <nut-radio v-for="i in tags" shape="button" :label="String(i.value)">{{ i.label }}</nut-radio> -->
-          <span v-for="i in tags" class="tag" :class="{ 'current': i.value === tag }" @click="setTag(i.value)">{{ i.label }}</span>
+          <span
+            v-for="i in tags"
+            :key="i.value"
+            class="tag"
+            :class="{ 'current': i.value === tag }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="i.value === tag"
+            @click="setTag(i.value)"
+            @keydown.enter="setTag(i.value)"
+          >{{ i.label }}</span>
         <!-- </nut-radiogroup> -->
       </div>
       <div class="subs-list-container" :style="{ paddingTop: `${radioWrapperHeight}px` }">
@@ -123,7 +141,14 @@
         </section>
         <div v-if="filterdSubsCount > 0" class="subs-list-content">
           <div class="title-wrappers">
-            <p class="list-title" @click="toggleFold('sub')">
+            <p
+              class="list-title"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!isFold('sub')"
+              @click="toggleFold('sub')"
+              @keydown.enter="toggleFold('sub')"
+            >
               <span class="list-title-text">{{ `${$t(`specificWord.singleSub`)  }(${filterdSubsCount})` }}</span>
               <nut-icon v-if="!isFold('sub')" name="rect-down" size="12px"></nut-icon>
               <nut-icon v-else name="rect-right" size="12px"></nut-icon>
@@ -165,7 +190,14 @@
         </div>
         <div v-if="filterdColsCount > 0" class="subs-list-content">
           <div class="title-wrappers">
-            <p class="list-title" @click="toggleFold('col')">
+            <p
+              class="list-title"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!isFold('col')"
+              @click="toggleFold('col')"
+              @keydown.enter="toggleFold('col')"
+            >
               <span class="list-title-text">{{ `${$t(`specificWord.collectionSub`)  }(${filterdColsCount})`}}</span>
               <nut-icon v-if="!isFold('col')" name="rect-down" size="12px"></nut-icon>
               <nut-icon v-else name="rect-right" size="12px"></nut-icon>
@@ -302,7 +334,7 @@ import { useMethodStore } from '@/store/methodStore';
 import { useSettingsStore } from '@/store/settings';
 import { useSubsStore } from "@/store/subs";
 import { initStores } from "@/utils/initApp";
-import { getStoredAdminToken, setStoredAdminToken } from "@/utils/adminToken";
+import { adminTokenState, getStoredAdminToken, setStoredAdminToken } from "@/utils/adminToken";
 import { listItemMatchesSearch, shouldSearchListRemark } from "@/utils/listSearch";
 import { isMobile } from "@/utils/isMobile";
 const { showNotify } = useAppNotifyStore();
@@ -313,6 +345,10 @@ const uploadIsLoading = ref(false);
 const restoreIsLoading = ref(false);
 const addSubBtnIsVisible = ref(false);
 const adminToken = ref(getStoredAdminToken());
+// 登出 / 401 清除 token 后，同步清空输入框
+watch(adminTokenState, (value) => {
+  adminToken.value = value;
+});
 // const isSubFold = ref(localStorage.getItem('sub-fold') === '1');
 // const isColFold = ref(localStorage.getItem('col-fold') === '1');
 const methodStore = useMethodStore();
@@ -419,7 +455,7 @@ const onTouchEnd = () => {
 };
 
 const refresh = async () => {
-  await initStores(true, true, true);
+  await initStores(true, true, { forceFlows: true });
 };
 
 const saveTokenAndRetry = async () => {
@@ -602,7 +638,7 @@ const fileChange = async (event) => {
       // await subsStore.fetchSubsData();
       
       if (res?.data?.status === "success") {
-        await initStores(false, true, true);
+        await initStores(false, true);
         showNotify({
           type: "success",
           title: t(`subPage.import.succeed`),

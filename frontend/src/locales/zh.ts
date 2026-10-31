@@ -25,7 +25,8 @@ export default {
       failedStatusOnly: "请求失败: {status}",
       failed: "请求失败",
       network: "网络错误或后端异常，无法连接后端服务\n",
-      noResponse: "请求没有收到响应"
+      noResponse: "请求没有收到响应",
+      unauthorized: "管理 token 无效或已过期，请重新输入"
     }
   },
   navBar: {
@@ -195,7 +196,8 @@ export default {
     },
     copyNotify: {
       succeed: "复制订阅链接成功\n请导入代理工具使用",
-      failed: "复制订阅链接失败\n{e}"
+      failed: "复制订阅链接失败\n{e}",
+      linkFailed: "获取订阅链接失败，请稍后重试"
     },
     copyConfigNotify: {
       loading: "克隆配置中...",
@@ -720,6 +722,13 @@ export default {
       restore: "恢复",
       restoreTitle: "恢复备份",
       restoreContent: "恢复会覆盖同名订阅源、组合订阅、规则模板和设置。建议先导出当前备份。"
+    },
+    session: {
+      title: "管理 Token",
+      desc: "退出登录会清除保存在此浏览器中的管理 token，并回到 token 输入界面。",
+      logout: "退出登录",
+      confirmTitle: "退出登录",
+      confirmContent: "将清除此浏览器中保存的管理 token，之后需要重新输入。确定退出吗？"
     },
     templates: {
       title: "规则模板",

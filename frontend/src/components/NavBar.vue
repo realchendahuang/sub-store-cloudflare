@@ -256,10 +256,10 @@ const refresh = async () => {
   if (["/preview"].includes(route.path)) {
     window.location.reload();
   } else if (["/subs"].includes(route.path)) {
-    initStores(true, true, true);
+    initStores(true, true, { forceFlows: true });
   } else {
     showNotify({ title: i18n_global("globalNotify.refresh.loading"), type: "primary" });
-    await initStores(true, true, true);
+    await initStores(true, true, { forceFlows: true });
   }
 };
 </script>

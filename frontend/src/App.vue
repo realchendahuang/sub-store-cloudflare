@@ -29,7 +29,7 @@ const allLength = ref(null);
 useThemes();
 
 onMounted(() => {
-  initStores(true, true, false);
+  initStores(true, true);
 });
 
 watchEffect(() => {

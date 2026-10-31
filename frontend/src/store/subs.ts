@@ -11,6 +11,9 @@ const cloudflareApi = useCloudflareApi();
 const fetchFlowsAbortControllers = new Set<AbortController>();
 const fetchFlowAbortControllers = new Map<string, AbortController>();
 const latestFlowRequestVersions = new Map<string, number>();
+// 流量信息上次成功获取时间（按 flow key），用于 60 秒内不重复请求
+const flowFetchedAt = new Map<string, number>();
+const FLOW_REFETCH_INTERVAL = 60 * 1000;
 let flowRequestSequence = 0;
 
 const canFetchFlowsForCurrentPage = () => window.location.pathname === '/subs';
@@ -57,6 +60,8 @@ const clearFlowRequestVersion = (flowKey: string, version: number) => {
 type FetchFlowsOptions = {
   cancelPrevious?: boolean;
   missingOnly?: boolean;
+  /** 用户显式刷新：忽略 60 秒内已获取过的缓存 */
+  force?: boolean;
   priority?: number;
 };
 export const useSubsStore = defineStore('subsStore', {
@@ -141,6 +146,11 @@ export const useSubsStore = defineStore('subsStore', {
       fetchFlowAbortControllers.clear();
       latestFlowRequestVersions.clear();
     },
+    resetAll() {
+      this.cancelFetchFlows();
+      flowFetchedAt.clear();
+      this.$reset();
+    },
     async fetchFlows(sub?: Sub[], options: FetchFlowsOptions = {}) {
       type FlowUrlItem = [string, string, boolean, boolean, boolean];
       if (!canFetchFlowsForCurrentPage()) {
@@ -152,6 +162,7 @@ export const useSubsStore = defineStore('subsStore', {
       const {
         cancelPrevious = !isTargetedFetch,
         missingOnly = false,
+        force = false,
         priority = isTargetedFetch ? 100 : 0,
       } = options;
 
@@ -186,6 +197,7 @@ export const useSubsStore = defineStore('subsStore', {
             const data = res?.data;
             if (data) {
               this.flows[url] = {...data, hideExpire, showRemaining };
+              flowFetchedAt.set(url, Date.now());
             }
           }
         } catch (e) {
@@ -197,8 +209,14 @@ export const useSubsStore = defineStore('subsStore', {
         }
       };
 
+      const now = Date.now();
       const flowsUrlList = (getFlowsUrlList(sub || this.subs) as FlowUrlItem[])
-        .filter(([url]) => !missingOnly || !(url in this.flows));
+        .filter(([url]) => !missingOnly || !(url in this.flows))
+        .filter(([url, , noFlow]) => {
+          if (force || noFlow || !(url in this.flows)) return true;
+          const fetchedAt = flowFetchedAt.get(url);
+          return fetchedAt === undefined || now - fetchedAt >= FLOW_REFETCH_INTERVAL;
+        });
 
       const flowTasks = [] as Array<{ label: string; signal: AbortSignal; task: () => Promise<void> }>;
 

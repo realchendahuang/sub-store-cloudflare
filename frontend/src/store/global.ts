@@ -13,7 +13,6 @@ export const useGlobalStore = defineStore('globalStore', {
       isDefaultIcon: localStorage.getItem('isDefaultIcon') === '1',
       isDarkMode: false,
       env: {},
-      isDockerDeployment: false,
       isSimpleMode: localStorage.getItem('isSimpleMode') === null
         ? true
         : localStorage.getItem('isSimpleMode') === '1',
@@ -103,10 +102,8 @@ export const useGlobalStore = defineStore('globalStore', {
       }
       this.showFloatingRefreshButton = showFloatingRefreshButton;
     },
-    async setEnv(options?: { bypassCache?: boolean; strict?: boolean }) {
-      const res = await envApi.getEnv({
-        bypassCache: options?.bypassCache === true,
-      });
+    async setEnv(options?: { timeout?: number; strict?: boolean }) {
+      const res = await envApi.getEnv({ timeout: options?.timeout });
       const nextEnv = res?.data?.status === 'success' ? res.data.data : null;
 
       if (!nextEnv?.backend) {
@@ -118,15 +115,7 @@ export const useGlobalStore = defineStore('globalStore', {
 
       this.env = nextEnv;
 
-      // 检测是否是Docker部署
-      if (this.env?.meta?.node?.env?.SUB_STORE_DOCKER === 'true') {
-        this.isDockerDeployment = true;
-      }
-
       return nextEnv;
-    },
-    setDockerDeployment(isDockerDeployment: boolean) {
-      this.isDockerDeployment = isDockerDeployment;
     },
     setSavedPositions(key: string, value: any) {
       this.savedPositions[key] = value;
