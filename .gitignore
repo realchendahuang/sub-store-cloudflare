@@ -59,3 +59,6 @@ cloudflare/worker-configuration.d.ts
 !**/.vscode/extensions.json
 *.swp
 *.swo
+
+# Orbital 运行时状态，不进版本
+orbital/
