@@ -7,7 +7,14 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "node ../scripts/generate-script-registry.mjs && pnpm run types:check && tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "check": "node ../scripts/generate-script-registry.mjs && pnpm run types:check && pnpm run typecheck && pnpm run lint",
+    "typecheck": "tsrs --noEmit --fast && tsrs -p tsconfig.test.json --noEmit --fast",
+    "typecheck:strict": "tsrs --noEmit && tsrs -p tsconfig.test.json --noEmit",
+    "typecheck:tsc": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "test": "node ../scripts/generate-script-registry.mjs && vitest run",
     "dev": "node ../scripts/generate-script-registry.mjs && wrangler dev",
     "deploy": "node ../scripts/generate-script-registry.mjs && wrangler deploy --config wrangler.deploy.local.jsonc",
@@ -25,6 +32,9 @@
     "@cloudflare/vitest-pool-workers": "^0.18.4",
     "@cloudflare/workers-types": "^5.20260710.1",
     "@types/node": "^22.18.0",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "tsrs": "7.1.0-beta.tsrs4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
     "wrangler": "^4.110.0"

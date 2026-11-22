@@ -1,19 +1,27 @@
 // 响应式容器宽度 mixin
+// 实际宽度由 :root 上的 --content-max-width 决定（见 global.scss），
+// 页面主体、顶部栏、底部栏与侧边栏共用同一个值，避免各处断点不一致。
 @mixin responsive-container-width {
   width: 100%;
-  
+  max-width: var(--content-max-width);
+}
+
+// 弹窗专用宽度：不随内容区加宽，避免底部弹窗在大屏上过宽
+@mixin popup-container-width {
+  width: 100%;
+
   @media screen and (min-width: 600px) {
     max-width: 85%;
   }
-  
+
   @media screen and (min-width: 768px) {
     max-width: 630px;
   }
-  
+
   @media screen and (min-width: 900px) {
     max-width: 700px;
   }
-  
+
   @media screen and (min-width: 1200px) {
     max-width: 900px;
   }
@@ -34,7 +42,7 @@
     right: auto !important;
     inset-inline: 0 !important;
     margin-inline: auto !important;
-    @include responsive-container-width;
+    @include popup-container-width;
   }
 }
 
@@ -54,3 +62,4 @@ $container-width-sm: 85%;
 $container-width-md: 630px;
 $container-width-lg: 700px;
 $container-width-xl: 900px;
+$container-width-xxl: 1200px;

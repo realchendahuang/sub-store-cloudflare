@@ -18,13 +18,13 @@ export default {
       flowFailed: "刷新 {name} 失败！",
       failed: "数据刷新失败\n",
       loading: "刷新数据中...",
-      backendChanged: "检测到后端变化，更新数据中..."
+      backendChanged: "Worker 已更新，正在刷新数据..."
     },
     request: {
       failedWithStatus: "请求失败: {status} {statusText}",
       failedStatusOnly: "请求失败: {status}",
       failed: "请求失败",
-      network: "网络错误或后端异常，无法连接后端服务\n",
+      network: "网络错误，或无法连接 Worker API\n",
       noResponse: "请求没有收到响应",
       unauthorized: "管理 token 无效或已过期，请重新输入"
     }
@@ -49,7 +49,7 @@ export default {
     },
     pagesTitle: {
       sub: "订阅管理",
-      tools: "兼容工具",
+      tools: "工具",
       my: "设置",
       subEditor: "编辑订阅",
       sourceCreate: "新建订阅源",
@@ -66,46 +66,69 @@ export default {
     my: "设置"
   },
   toolsPage: {
+    resourceTypes: {
+      source: "订阅源",
+      collection: "组合订阅",
+      template: "规则模板",
+      share: "分享链接"
+    },
     converter: {
       title: "一次性转换",
-      desc: "粘贴节点、订阅或规则，不保存到 D1，直接转换为目标格式。",
+      desc: "粘贴节点、订阅或规则，直接转换为目标格式，不会保存任何内容。",
+      kind: "输入类型",
+      target: "输出格式",
       proxy: "节点/订阅",
       rule: "规则",
       input: "粘贴待转换内容",
       output: "转换结果",
       run: "开始转换",
-      copy: "复制结果"
+      copy: "复制结果",
+      stats: "解析 {parsed} · 输出 {emitted} · 跳过 {skipped}"
     },
     shares: {
       title: "独立分享链接",
-      desc: "为单个订阅源或组合创建可撤销、可过期、可限制格式的下载链接。Token 只在创建时显示。",
+      desc: "为单个订阅源或组合订阅创建可撤销的下载链接，可设置有效期，也可限定输出格式。",
       resourceType: "资源类型",
-      resourceId: "资源 ID",
-      target: "限制输出格式，可留空",
-      expires: "有效小时数，0 表示不过期",
+      resource: "资源",
+      noResource: "暂无可分享的资源",
+      target: "输出格式",
+      autoTarget: "自动（按客户端 UA）",
+      expires: "有效期（小时，0 = 永不过期）",
+      expiresError: "请输入 0 到 {max} 之间的整数",
       create: "创建链接",
+      createdTitle: "链接已创建",
+      createdHint: "请立即复制，Token 只显示这一次。",
+      copy: "复制",
       empty: "还没有独立分享链接",
+      enabled: "已启用",
+      disabled: "已停用",
+      expiresAt: "{time} 过期",
+      never: "永不过期",
       disable: "停用",
       enable: "启用"
     },
     recycle: {
       title: "回收站",
-      desc: "最多保留 50 条已删除配置。恢复不会覆盖同名资源。",
+      desc: "保留最近删除的 50 条配置。恢复时不会覆盖已存在的同 ID 资源。",
       empty: "回收站为空",
+      deletedAt: "删除于 {time}",
       restore: "恢复",
-      purge: "彻底删除"
+      purge: "彻底删除",
+      purgeTitle: "彻底删除",
+      purgeContent: "确定彻底删除「{name}」吗？此操作无法撤销。"
     },
     notify: {
       converted: "转换完成",
       copied: "已复制",
       shareCreated: "分享链接已创建",
+      restored: "已恢复",
       failed: "操作失败\n{e}"
     }
   },
   notFoundPage: {
     title: "啊哦～ URL 错误！",
     desc: "回首页",
-    backendDesc: "如果你看到这个 可能是因为浏览器前端路由拦截的问题 可以强制刷新查看或直接使用该链接 不影响此链接的使用"
+    backendDesc: "该链接被浏览器中的页面路由拦截了。强制刷新页面或直接打开链接即可，链接本身仍然可用。"
   },
   subPage: {
     import: {
@@ -116,14 +139,14 @@ export default {
       tipsContent: "可导入订阅源或组合订阅的 JSON 配置。完整配置迁移请使用「设置」页面的备份恢复。"
     },
     addSubTitle: "选择要创建的订阅类型",
-    previewTitle: "预览/拷贝订阅",
+    previewTitle: "预览或复制订阅",
     tag: {
       addTagTitle: "添加标签",
       tagPlaceholder: "请输入标签名称",
       addTagBtn: "+ 新建标签"
     },
     emptySub: {
-      title: "你还没有添加订阅",
+      title: "还没有订阅",
       desc: "添加远程订阅或本地节点后开始聚合",
       btn: "立即添加"
     },
@@ -180,14 +203,14 @@ export default {
       remainingDays: "重置",
       remainingDaysUnit: " 天",
       noRecord: "刷新后可获取流量情况",
-      noFlow: "不查询流量",
+      noFlow: "已关闭流量查询",
       noFlowInfo: "无流量信息",
       flowError: "无法获取流量信息",
       noExpiresInfo: "无有效期信息"
     },
     deleteItem: {
       title: "删除",
-      desc: "是否确认删除 {displayName}？删除后不可恢复！",
+      desc: "确定删除 {displayName} 吗？\n删除后可在「工具」页的回收站中恢复。",
       succeedNotify: "删除成功！",
       btn: {
         confirm: "确认删除",
@@ -287,11 +310,11 @@ export default {
         },
         remark: {
           label: "备注",
-          placeholder: "请输入备注信息"
+          placeholder: "可选，显示在卡片上"
         },
         displayName: {
           label: "显示名称",
-          placeholder: "输入展示的名称"
+          placeholder: "在列表中显示的名称"
         },
         subInfoUrl: {
           label: "查询流量信息订阅链接",
@@ -307,7 +330,7 @@ export default {
         },
         tag: {
           label: "标签",
-          placeholder: "点击右侧图标选择，标签(用 , 分隔) 将用于分组"
+          placeholder: "用逗号分隔，用于分组"
         },
         template: {
           label: "规则模板",
@@ -368,7 +391,7 @@ export default {
         },
         icon: {
           label: "图标链接",
-          placeholder: "可点击左侧或顶部图标, 从图标库填入图标链接，不要使用 jpg"
+          placeholder: "图标图片链接（PNG 或 SVG）"
         },
         isIconColor: {
           label: "图标原色"
@@ -398,9 +421,9 @@ export default {
           }
         },
         firstSubFlow: {
-          label: "透传单条订阅流量信息",
+          label: "使用第一个订阅源的流量信息",
           tips: {
-            title: "透传单条订阅流量信息",
+            title: "使用第一个订阅源的流量信息",
             content: "组合订阅默认透传第一个单条订阅的流量信息。若需要展示聚合后的流量，请在对应订阅源里手动填写 subscription-userinfo，或使用独立 flowUrl 查询。",
             okText: "确定"
           }
@@ -710,7 +733,7 @@ export default {
   },
   myPage: {
     profile: {
-      desc: "订阅聚合、节点处理和云端规则模板",
+      desc: "运行在 Cloudflare 上的订阅聚合、节点处理与规则模板",
       runtime: "运行环境",
       storage: "存储",
       version: "版本"
@@ -752,17 +775,25 @@ export default {
     },
     request: {
       title: "请求设置",
+      desc: "控制 Worker 拉取远程订阅的方式，保存后对下一次下载或预览生效。",
       defaultUserAgent: "默认 User-Agent",
       defaultFlowUserAgent: "流量信息 User-Agent",
-      defaultTimeout: "请求超时，单位毫秒",
+      defaultTimeout: "请求超时（毫秒）",
       backendRequestConcurrency: "远程订阅并发数",
-      backendRequestConcurrencyWaitTime: "并发请求间隔，单位毫秒",
-      remoteCacheTtl: "远程订阅边缘缓存秒数，0 表示关闭",
-      remoteCacheStaleOnError: "远程订阅失败时允许使用最近的边缘缓存",
-      nodeInfoApiUrl: "节点信息 HTTPS API，必须包含 {ip}",
-      summary: "当前远程订阅拉取并发 {concurrency}，超时 {timeout}ms。"
+      backendRequestConcurrencyWaitTime: "并发请求间隔（毫秒）",
+      remoteCacheTtl: "远程缓存时长（秒，0 = 关闭）",
+      remoteCacheStaleOnError: "远程订阅失败时使用最近一次缓存",
+      subrequestLimit: "单次请求的子请求上限",
+      nodeInfoApiUrl: "节点信息 API（HTTPS，须包含 {'{ip}'}）",
+      unlimited: "留空 = 不限制",
+      rangeHint: "{min}–{max}",
+      rangeError: "请输入 {min} 到 {max} 之间的整数",
+      nodeInfoApiUrlError: "必须是包含 {'{ip}'} 的 HTTPS 地址",
+      required: "必填",
+      invalid: "部分请求设置无效，请检查标红的字段。"
     },
     btn: {
+      reset: "重置",
       cancel: "取消",
       edit: "编辑",
       save: "保存",

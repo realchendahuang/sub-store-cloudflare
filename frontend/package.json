@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "dev:production": "vite --host --mode production",
     "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit",
     "check:locales": "node scripts/check-locales.mjs",
     "preview": "vite preview --host"
   },

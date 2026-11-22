@@ -2,7 +2,7 @@
   <div class="my-page-wrapper">
     <section class="profile-block">
       <div class="radio-wrapper">
-        <span class="tag current">{{ env.runtime || env.backend || "Cloudflare" }}</span>
+        <span class="tag current">{{ env.runtime || "Cloudflare Workers" }}</span>
         <div class="storage-language-switch">
           <LanguageSwitcherButton />
         </div>
@@ -12,8 +12,7 @@
           <nut-avatar
             size="72"
             bg-color="var(--card-color)"
-            :url="icon"
-            class="auto-reverse"
+            :url="logoIcon"
           />
           <div class="name">
             <p class="title">{{ appName }}</p>
@@ -23,17 +22,6 @@
             </p>
           </div>
         </div>
-        <div class="actions">
-          <input ref="fileInput" type="file" accept="application/json,.json" @change="restoreFromFile" />
-          <nut-button plain type="primary" size="small" :loading="restoreIsLoading" @click="selectBackupFile">
-            <font-awesome-icon v-if="!restoreIsLoading" icon="fa-solid fa-cloud-arrow-up" />
-            {{ t("myPage.backup.restore") }}
-          </nut-button>
-          <nut-button type="primary" size="small" :loading="exportIsLoading" @click="exportBackup">
-            <font-awesome-icon v-if="!exportIsLoading" icon="fa-solid fa-cloud-arrow-down" />
-            {{ t("myPage.backup.export") }}
-          </nut-button>
-        </div>
       </div>
     </section>
 
@@ -42,6 +30,17 @@
         <h1>{{ t("myPage.backup.title") }}</h1>
       </div>
       <p class="card-desc">{{ t("myPage.backup.desc") }}</p>
+      <div class="card-actions">
+        <input ref="fileInput" type="file" accept="application/json,.json" @change="restoreFromFile" />
+        <nut-button plain type="primary" size="small" :loading="restoreIsLoading" @click="selectBackupFile">
+          <font-awesome-icon v-if="!restoreIsLoading" icon="fa-solid fa-cloud-arrow-up" />
+          {{ t("myPage.backup.restore") }}
+        </nut-button>
+        <nut-button type="primary" size="small" :loading="exportIsLoading" @click="exportBackup">
+          <font-awesome-icon v-if="!exportIsLoading" icon="fa-solid fa-cloud-arrow-down" />
+          {{ t("myPage.backup.export") }}
+        </nut-button>
+      </div>
     </section>
 
     <section class="config-card storage-card">
@@ -94,36 +93,55 @@
     </section>
 
     <section class="config-card">
-      <div class="title-wrapper" @click="requestEditing ? cancelRequestEdit() : startRequestEdit()">
+      <div class="title-wrapper">
         <h1>{{ t("myPage.request.title") }}</h1>
-        <div class="config-btn-wrapper">
-          <template v-if="requestEditing">
-            <nut-button class="cancel-btn" plain type="info" size="mini" :disabled="requestSaving" @click.stop="cancelRequestEdit">
-              <font-awesome-icon icon="fa-solid fa-ban" />
-              {{ t("myPage.btn.cancel") }}
-            </nut-button>
-            <nut-button class="save-btn" type="primary" size="mini" :loading="requestSaving" @click.stop="saveRequestSettings">
-              <font-awesome-icon v-if="!requestSaving" icon="fa-solid fa-floppy-disk" />
-              {{ t("myPage.btn.save") }}
-            </nut-button>
-          </template>
-          <nut-icon v-else class="right-icon" name="right"></nut-icon>
-        </div>
       </div>
-      <div v-if="requestEditing" class="config-input-wrapper">
-        <nut-input class="input" v-model="requestForm.defaultUserAgent" :placeholder="t('myPage.request.defaultUserAgent')" type="text" input-align="left" />
-        <nut-input class="input" v-model="requestForm.defaultFlowUserAgent" :placeholder="t('myPage.request.defaultFlowUserAgent')" type="text" input-align="left" />
-        <nut-input class="input" v-model="requestForm.defaultTimeout" :placeholder="t('myPage.request.defaultTimeout')" type="number" input-align="left" />
-        <nut-input class="input" v-model="requestForm.backendRequestConcurrency" :placeholder="t('myPage.request.backendRequestConcurrency')" type="number" input-align="left" />
-        <nut-input class="input" v-model="requestForm.backendRequestConcurrencyWaitTime" :placeholder="t('myPage.request.backendRequestConcurrencyWaitTime')" type="number" input-align="left" />
-        <nut-input class="input" v-model="requestForm.remoteCacheTtl" :placeholder="t('myPage.request.remoteCacheTtl')" type="number" input-align="left" />
-        <nut-input class="input" v-model="requestForm.nodeInfoApiUrl" :placeholder="t('myPage.request.nodeInfoApiUrl')" type="text" input-align="left" />
-        <label class="boolean-setting">
-          <input v-model="requestForm.remoteCacheStaleOnError" type="checkbox" />
-          {{ t('myPage.request.remoteCacheStaleOnError') }}
+      <p class="card-desc">{{ t("myPage.request.desc") }}</p>
+      <form class="request-form" novalidate @submit.prevent="saveRequestSettings">
+        <label v-for="field in numberFields" :key="field.key" class="field">
+          <span class="field-label">{{ t(`myPage.request.${field.key}`) }}</span>
+          <input
+            v-model.trim="requestForm[field.key]"
+            class="field-input"
+            :class="{ 'is-invalid': requestErrors[field.key] }"
+            type="number"
+            inputmode="numeric"
+            :min="field.min"
+            :max="field.max"
+            step="1"
+            :placeholder="field.optional ? t('myPage.request.unlimited') : ''"
+          />
+          <span class="field-hint" :class="{ 'is-error': requestErrors[field.key] }">
+            {{ requestErrors[field.key] || fieldHint(field) }}
+          </span>
         </label>
-      </div>
-      <p v-else class="card-desc">{{ requestSummary }}</p>
+        <label v-for="field in textFields" :key="field.key" class="field">
+          <span class="field-label">{{ t(`myPage.request.${field.key}`) }}</span>
+          <input
+            v-model.trim="requestForm[field.key]"
+            class="field-input"
+            :class="{ 'is-invalid': requestErrors[field.key] }"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span v-if="requestErrors[field.key]" class="field-hint is-error">{{ requestErrors[field.key] }}</span>
+        </label>
+        <div class="field switch-field">
+          <span class="field-label">{{ t("myPage.request.remoteCacheStaleOnError") }}</span>
+          <nut-switch v-model="requestForm.remoteCacheStaleOnError" />
+        </div>
+        <div class="form-actions">
+          <nut-button plain type="info" size="small" :disabled="requestSaving" @click="syncRequestForm">
+            <font-awesome-icon icon="fa-solid fa-ban" />
+            {{ t("myPage.btn.reset") }}
+          </nut-button>
+          <nut-button type="primary" size="small" :loading="requestSaving" native-type="submit">
+            <font-awesome-icon v-if="!requestSaving" icon="fa-solid fa-floppy-disk" />
+            {{ t("myPage.btn.save") }}
+          </nut-button>
+        </div>
+      </form>
     </section>
 
     <nut-popup v-model:visible="templateImportVisible" position="bottom" round closeable :style="{ height: '82vh' }">
@@ -165,7 +183,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import { storeToRefs } from "pinia";
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from "vue";
 import { Dialog } from "@nutui/nutui";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
@@ -174,9 +193,10 @@ import { useCloudflareApi } from "@/api/app";
 import LanguageSwitcherButton from "@/components/LanguageSwitcherButton.vue";
 import DesktopPicker from "@/components/DesktopPicker.vue";
 import { useSettingsApi } from "@/api/settings";
-import { useBackend } from "@/hooks/useBackend";
+import logoIcon from "@/assets/icons/logo.svg?url";
 import { useAppNotifyStore } from "@/store/appNotify";
 import { useCodeStore } from "@/store/codeStore";
+import { useGlobalStore } from "@/store/global";
 import { useSettingsStore } from "@/store/settings";
 import { resetToTokenEntry } from "@/utils/session";
 import { TEMPLATE_TARGET_OPTIONS, getTargetLabel } from "@/constants/subscriptionTargets";
@@ -190,20 +210,42 @@ const cmStore = useCodeStore();
 const { showNotify } = useAppNotifyStore();
 const { t } = useI18n();
 const router = useRouter();
-const { icon, env } = useBackend();
+const { env } = storeToRefs(useGlobalStore());
 const TEMPLATE_EDITOR_ID = "TemplateEditor";
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const templateFileInput = ref<HTMLInputElement | null>(null);
 const restoreIsLoading = ref(false);
 const exportIsLoading = ref(false);
-const requestEditing = ref(false);
 const requestSaving = ref(false);
 const templateImporting = ref(false);
 const templateImportVisible = ref(false);
 const templateEditingId = ref("");
 const templateTargetPickerVisible = ref(false);
 const templates = ref<any[]>([]);
+
+type RequestNumberKey =
+  | "backendRequestConcurrency"
+  | "backendRequestConcurrencyWaitTime"
+  | "defaultTimeout"
+  | "remoteCacheTtl"
+  | "subrequestLimit";
+type RequestTextKey = "defaultUserAgent" | "defaultFlowUserAgent" | "nodeInfoApiUrl";
+type RequestNumberField = { key: RequestNumberKey; min: number; max: number; optional?: boolean };
+
+// 范围与后端 /api/settings 及请求逻辑的校验保持一致
+const numberFields: RequestNumberField[] = [
+  { key: "backendRequestConcurrency", min: 1, max: 6 },
+  { key: "defaultTimeout", min: 1000, max: 120000 },
+  { key: "remoteCacheTtl", min: 0, max: 3600 },
+  { key: "subrequestLimit", min: 10, max: 1000, optional: true },
+  { key: "backendRequestConcurrencyWaitTime", min: 0, max: 5000 },
+];
+const textFields: { key: RequestTextKey }[] = [
+  { key: "defaultUserAgent" },
+  { key: "defaultFlowUserAgent" },
+  { key: "nodeInfoApiUrl" },
+];
 
 const requestForm = reactive({
   defaultUserAgent: "",
@@ -213,8 +255,10 @@ const requestForm = reactive({
   backendRequestConcurrencyWaitTime: "",
   remoteCacheTtl: "",
   remoteCacheStaleOnError: true,
+  subrequestLimit: "",
   nodeInfoApiUrl: "",
 });
+const requestErrors = reactive<Partial<Record<RequestNumberKey | RequestTextKey, string>>>({});
 const templateForm = reactive({
   id: "",
   name: "",
@@ -230,44 +274,67 @@ const templateTargetColumns = computed(() => {
 const templateTargetLabel = computed(() => {
   return getTargetLabel(templateForm.target);
 });
-const appName = computed(() => {
-  return env.value?.app
-    || env.value?.meta?.cloudflare?.env?.SUB_STORE_BACKEND_CUSTOM_NAME
-    || "Sub-Store Cloudflare";
-});
-const requestSummary = computed(() => {
-  return t("myPage.request.summary", {
-    concurrency: settingsStore.backendRequestConcurrency || "3",
-    timeout: settingsStore.defaultTimeout || "30000",
-  });
-});
+const appName = computed(() => env.value?.app || "Sub-Store Cloudflare");
+const fieldHint = (field: RequestNumberField) => {
+  return t("myPage.request.rangeHint", { min: field.min, max: field.max });
+};
 
 const syncRequestForm = () => {
   requestForm.defaultUserAgent = settingsStore.defaultUserAgent || "";
   requestForm.defaultFlowUserAgent = settingsStore.defaultFlowUserAgent || "";
-  requestForm.defaultTimeout = settingsStore.defaultTimeout || "";
-  requestForm.backendRequestConcurrency = settingsStore.backendRequestConcurrency || "";
-  requestForm.backendRequestConcurrencyWaitTime = settingsStore.backendRequestConcurrencyWaitTime || "";
+  requestForm.defaultTimeout = settingsStore.defaultTimeout || "30000";
+  requestForm.backendRequestConcurrency = settingsStore.backendRequestConcurrency || "3";
+  requestForm.backendRequestConcurrencyWaitTime = settingsStore.backendRequestConcurrencyWaitTime || "0";
   requestForm.remoteCacheTtl = settingsStore.remoteCacheTtl || "300";
   requestForm.remoteCacheStaleOnError = settingsStore.remoteCacheStaleOnError !== false;
+  requestForm.subrequestLimit = settingsStore.subrequestLimit || "";
   requestForm.nodeInfoApiUrl = settingsStore.nodeInfoApiUrl || "https://ipwho.is/{ip}";
+  Object.keys(requestErrors).forEach((key) => delete requestErrors[key]);
 };
 
-const startRequestEdit = () => {
-  syncRequestForm();
-  requestEditing.value = true;
-};
+const validateRequestForm = () => {
+  Object.keys(requestErrors).forEach((key) => delete requestErrors[key]);
 
-const cancelRequestEdit = () => {
-  syncRequestForm();
-  requestEditing.value = false;
+  for (const field of numberFields) {
+    const raw = String(requestForm[field.key] ?? "").trim();
+    if (field.optional && raw === "") continue;
+    const value = Number(raw);
+    if (raw === "" || !Number.isInteger(value) || value < field.min || value > field.max) {
+      requestErrors[field.key] = t("myPage.request.rangeError", { min: field.min, max: field.max });
+    }
+  }
+
+  const nodeInfoApiUrl = requestForm.nodeInfoApiUrl.trim();
+  if (!nodeInfoApiUrl.startsWith("https://") || !nodeInfoApiUrl.includes("{ip}")) {
+    requestErrors.nodeInfoApiUrl = t("myPage.request.nodeInfoApiUrlError");
+  }
+  if (!requestForm.defaultUserAgent.trim()) {
+    requestErrors.defaultUserAgent = t("myPage.request.required");
+  }
+  if (!requestForm.defaultFlowUserAgent.trim()) {
+    requestErrors.defaultFlowUserAgent = t("myPage.request.required");
+  }
+
+  return Object.keys(requestErrors).length === 0;
 };
 
 const saveRequestSettings = async () => {
+  if (!validateRequestForm()) {
+    showNotify({ type: "danger", title: t("myPage.request.invalid") });
+    return;
+  }
+
   requestSaving.value = true;
   try {
-    const saved = await settingsStore.changeSettings({ ...requestForm });
-    requestEditing.value = !saved;
+    const saved = await settingsStore.changeSettings({
+      ...requestForm,
+      // 空字符串表示不限制子请求数量
+      subrequestLimit: String(requestForm.subrequestLimit).trim(),
+    });
+    // 保存失败时保留用户已填内容
+    if (saved) syncRequestForm();
+  } catch {
+    // 请求错误已由 axios 拦截器提示
   } finally {
     requestSaving.value = false;
   }
@@ -442,7 +509,13 @@ const restoreFromFile = async (event: Event) => {
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-onMounted(fetchTemplates);
+// 直接打开设置页时，设置可能还没加载完，加载完成后再填充表单
+watch(() => settingsStore.hasFetchedSettings, syncRequestForm);
+
+onMounted(() => {
+  syncRequestForm();
+  fetchTemplates();
+});
 </script>
 
 <style lang="scss" scoped>
@@ -494,7 +567,7 @@ onMounted(fetchTemplates);
 
   .avatar-wrapper {
     min-width: 0;
-    max-width: 64%;
+    max-width: 100%;
     display: flex;
     align-items: center;
 
@@ -530,33 +603,6 @@ onMounted(fetchTemplates);
     line-height: 1.45;
   }
 
-  .actions {
-    margin-left: 12px;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    input {
-      display: none;
-    }
-
-    svg {
-      margin-right: 4px;
-    }
-
-    .nut-button {
-      width: 116px;
-      padding: 0 10px;
-    }
-
-    .nut-button--plain {
-      background: transparent;
-    }
-
-    a {
-      margin-top: 12px;
-    }
-  }
 }
 
 .config-card {
@@ -569,10 +615,6 @@ onMounted(fetchTemplates);
 
 .nut-icon {
   color: var(--lowest-text-color);
-}
-
-.right-icon {
-  color: var(--comment-text-color);
 }
 
 .template-list {
@@ -671,7 +713,6 @@ onMounted(fetchTemplates);
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--divider-color);
-  cursor: pointer;
 
   h1 {
     margin: 0;
@@ -680,12 +721,7 @@ onMounted(fetchTemplates);
   }
 }
 
-.storage-card .title-wrapper {
-  cursor: default;
-}
-
-.storage-actions,
-.config-btn-wrapper {
+.storage-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -703,44 +739,98 @@ onMounted(fetchTemplates);
   line-height: 1.6;
 }
 
-.config-input-wrapper {
-  padding: 8px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  .input {
-    border-bottom: 1px solid var(--divider-color);
-  }
-}
-
-.boolean-setting {
-  min-height: 38px;
+.card-actions {
+  padding: 0 16px 16px;
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--second-text-color);
-  font-size: 13px;
+
+  input {
+    display: none;
+  }
+
+  svg {
+    margin-right: 4px;
+  }
+
+  .nut-button--plain {
+    background: transparent;
+  }
 }
 
-@media screen and (max-width: 430px) {
-  .profile-block {
-    .info {
-      align-items: flex-start;
+.request-form {
+  padding: 0 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+
+  .field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field-label {
+    color: var(--primary-text-color);
+    font-size: 13px;
+  }
+
+  .field-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+    background: var(--background-color);
+    color: var(--primary-text-color);
+    font-size: 14px;
+
+    &:focus {
+      outline: none;
+      border-color: var(--primary-color);
     }
 
-    .avatar-wrapper {
-      max-width: calc(100% - 132px);
-    }
-
-    .actions {
-      .nut-button {
-        width: 104px;
-        padding: 0 8px;
-      }
+    &.is-invalid {
+      border-color: var(--danger-color);
     }
   }
 
+  .field-hint {
+    color: var(--comment-text-color);
+    font-size: 12px;
+    line-height: 1.4;
+
+    &.is-error {
+      color: var(--danger-color);
+    }
+  }
+
+  .switch-field {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .form-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+
+    svg {
+      margin-right: 4px;
+    }
+
+    .nut-button--plain {
+      background: transparent;
+    }
+  }
+}
+
+@media screen and (max-width: 430px) {
   .title-wrapper {
     align-items: flex-start;
     flex-direction: column;
@@ -749,6 +839,10 @@ onMounted(fetchTemplates);
 
   .storage-actions {
     flex-wrap: wrap;
+  }
+
+  .request-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .template-item {

@@ -6,8 +6,7 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"],
-    "baseUrl": "."
+    "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*.ts"]
 }

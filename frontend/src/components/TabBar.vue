@@ -8,7 +8,11 @@
       size="22px"
     >
       <nut-tabbar-item class="tabbar-item" to="/subs" icon="link" :tab-title="t('tabBar.sub')" />
-      <nut-tabbar-item class="tabbar-item" to="/tools" icon="more-x" :tab-title="t('tabBar.tools')" />
+      <nut-tabbar-item class="tabbar-item" to="/tools" :tab-title="t('tabBar.tools')">
+        <template #icon>
+          <font-awesome-icon class="tabbar-fa-icon" icon="fa-solid fa-toolbox" />
+        </template>
+      </nut-tabbar-item>
       <nut-tabbar-item class="tabbar-item" to="/my" icon="setting" :tab-title="t('tabBar.my')" />
     </nut-tabbar>
   </div>
@@ -26,10 +30,6 @@
   const activeTab = ref(routeList.indexOf(route.path));
   const { isWideScreenNarrowModeActive } = useWideScreenNarrowMode();
 
-  const style = {
-    height: 'calc(56px + env(safe-area-inset-bottom))',
-    paddingBottom: 'env(safe-area-inset-bottom)',
-  };
   onBeforeRouteUpdate((to, from, next) => {
     activeTab.value = routeList.indexOf(to.path);
     // const scrollTop = document.documentElement.scrollTop || document.body.scrollTop
@@ -55,8 +55,10 @@
     }
 
     .tabbar {
-      padding-top: 8px;
-      padding-bottom: v-bind('style.paddingBottom');
+      box-sizing: border-box;
+      // 高度 = 标签栏本体 + 底部安全区（index.html 已启用 viewport-fit=cover）
+      height: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
+      padding: 0 0 env(safe-area-inset-bottom);
       box-shadow: none;
       backdrop-filter: blur(var(--tab-bar-blur));
       -webkit-backdrop-filter: blur(var(--tab-bar-blur));
@@ -73,8 +75,23 @@
         color: var(--lowest-text-color);
       }
       & > .nut-tabbar-item_icon-box > .nut-tabbar-item_icon-box_nav-word {
-        margin-top: 8px;
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.2;
         font-weight: 600;
+      }
+      .tabbar-fa-icon {
+        display: block;
+        width: 22px;
+        height: 22px;
+      }
+      // nut-icon 外层是行内盒，会被行高撑高；与插槽图标统一成 22px 高的盒子，三个标签才能对齐
+      & > .nut-tabbar-item_icon-box > view:not([class]),
+      & > .nut-tabbar-item_icon-box > .nut-tabbar-item_icon-box_icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 22px;
       }
     }
   }

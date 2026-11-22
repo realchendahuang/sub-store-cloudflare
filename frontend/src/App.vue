@@ -17,10 +17,12 @@ import { getFlowsUrlList } from "@/utils/getFlowsUrlList";
 import { initStores } from "@/utils/initApp";
 import { storeToRefs } from "pinia";
 import { ref, watchEffect, onMounted } from "vue";
+import { useRoute } from "vue-router";
 
 const subsStore = useSubsStore();
 const globalStore = useGlobalStore();
 const { shouldShowSideBar } = useWideScreenNarrowMode();
+const route = useRoute();
 
 const { subs, flows } = storeToRefs(subsStore);
 
@@ -29,7 +31,15 @@ const allLength = ref(null);
 useThemes();
 
 onMounted(() => {
-  initStores(true, true);
+  // 初次加载属于自动刷新，不弹出“刷新完成”提示（只有用户手动刷新才提示）
+  initStores(false, true);
+});
+
+// 编辑页在宽屏下使用更窄的内容宽度（#app 上的 CSS 变量，见 global.scss）
+watchEffect(() => {
+  document
+    .getElementById("app")
+    ?.classList.toggle("is-editor-route", route.meta?.limitContentWidth === true);
 });
 
 watchEffect(() => {

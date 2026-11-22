@@ -94,6 +94,7 @@ export const useSettingsStore = defineStore("settingsStore", {
       backendRequestConcurrencyWaitTime: "",
       remoteCacheTtl: "",
       remoteCacheStaleOnError: true,
+      subrequestLimit: "",
       nodeInfoApiUrl: "",
       syncTime: 0,
       theme: {
@@ -184,6 +185,7 @@ export const useSettingsStore = defineStore("settingsStore", {
         this.backendRequestConcurrencyWaitTime = normalizeSettingInputValue(res.data.data.backendRequestConcurrencyWaitTime);
         this.remoteCacheTtl = normalizeSettingInputValue(res.data.data.remoteCacheTtl);
         this.remoteCacheStaleOnError = res.data.data.remoteCacheStaleOnError !== false;
+        this.subrequestLimit = normalizeSettingInputValue(res.data.data.subrequestLimit);
         this.nodeInfoApiUrl = normalizeSettingInputValue(res.data.data.nodeInfoApiUrl);
         this.syncTime = res.data.data.syncTime || 0;
         this.avatarUrl = res.data.data.avatarUrl || "";
@@ -214,6 +216,7 @@ export const useSettingsStore = defineStore("settingsStore", {
         this.backendRequestConcurrencyWaitTime = normalizeSettingInputValue(res.data.data.backendRequestConcurrencyWaitTime);
         this.remoteCacheTtl = normalizeSettingInputValue(res.data.data.remoteCacheTtl);
         this.remoteCacheStaleOnError = res.data.data.remoteCacheStaleOnError !== false;
+        this.subrequestLimit = normalizeSettingInputValue(res.data.data.subrequestLimit);
         this.nodeInfoApiUrl = normalizeSettingInputValue(res.data.data.nodeInfoApiUrl);
         this.avatarUrl = res.data.data.avatarUrl || "";
         showNotify({ type: "success", title: t(`myPage.notify.save.succeed`) });

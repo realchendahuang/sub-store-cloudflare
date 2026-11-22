@@ -1,3 +1,37 @@
+// 内容区宽度：页面主体、导航栏、标签栏、侧边栏共用（见 mixins.scss）
+:root {
+  --content-max-width-base: 100%;
+  --content-max-width: var(--content-max-width-base);
+  // 移动端底部标签栏高度（不含安全区）
+  --tab-bar-height: 60px;
+
+  @media screen and (min-width: 600px) {
+    --content-max-width-base: 85%;
+  }
+
+  @media screen and (min-width: 768px) {
+    --content-max-width-base: 630px;
+  }
+
+  @media screen and (min-width: 900px) {
+    --content-max-width-base: 700px;
+  }
+
+  @media screen and (min-width: 1200px) {
+    --content-max-width-base: 900px;
+  }
+
+  // 左侧预留展开的侧边栏（160px）与边距，最宽 1200px
+  @media screen and (min-width: 1300px) {
+    --content-max-width-base: min(1200px, calc(100vw - 360px));
+  }
+}
+
+// 编辑页表单项少，宽屏下限制到更舒适的宽度
+#app.is-editor-route {
+  --content-max-width: min(var(--content-max-width-base), 960px);
+}
+
 // remove default styles
 body {
   outline: none;

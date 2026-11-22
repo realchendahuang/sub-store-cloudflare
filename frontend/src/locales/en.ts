@@ -18,13 +18,13 @@ export default {
       flowFailed: "Refresh of {name} failed!",
       failed: "Refresh Failed\n",
       loading: "Refreshing Data...",
-      backendChanged: "Backend changed. Refreshing data..."
+      backendChanged: "The Worker was updated. Refreshing data..."
     },
     request: {
       failedWithStatus: "Request failed: {status} {statusText}",
       failedStatusOnly: "Request failed: {status}",
       failed: "Request failed",
-      network: "Network error or backend unavailable\n",
+      network: "Network error or the Worker API is unreachable\n",
       noResponse: "No response received",
       unauthorized: "The admin token is invalid or expired. Please enter it again."
     }
@@ -49,7 +49,7 @@ export default {
     },
     pagesTitle: {
       sub: "Subscriptions",
-      tools: "Compatibility Tools",
+      tools: "Tools",
       my: "Settings",
       subEditor: "Edit Subscription",
       sourceCreate: "Create Source",
@@ -66,46 +66,69 @@ export default {
     my: "Settings"
   },
   toolsPage: {
+    resourceTypes: {
+      source: "Source",
+      collection: "Collection",
+      template: "Rule template",
+      share: "Share link"
+    },
     converter: {
       title: "One-shot conversion",
-      desc: "Paste nodes, a subscription, or rules and convert without saving to D1.",
+      desc: "Paste nodes, a subscription, or rules and convert them without saving anything.",
+      kind: "Input type",
+      target: "Output target",
       proxy: "Nodes / subscription",
       rule: "Rules",
       input: "Paste content to convert",
       output: "Converted result",
       run: "Convert",
-      copy: "Copy result"
+      copy: "Copy result",
+      stats: "Parsed {parsed} · emitted {emitted} · skipped {skipped}"
     },
     shares: {
       title: "Scoped share links",
-      desc: "Create revocable and expiring links restricted to one source or collection and optional output target. Tokens are shown only once.",
+      desc: "Create a revocable, optionally expiring link for one source or collection, optionally restricted to one output target.",
       resourceType: "Resource type",
-      resourceId: "Resource ID",
-      target: "Optional output restriction",
-      expires: "Lifetime in hours; 0 never expires",
+      resource: "Resource",
+      noResource: "Nothing to share yet",
+      target: "Output target",
+      autoTarget: "Auto (by client UA)",
+      expires: "Lifetime (hours, 0 = never expires)",
+      expiresError: "Enter a whole number from 0 to {max}",
       create: "Create link",
+      createdTitle: "Link created",
+      createdHint: "Copy it now. The token is shown only once.",
+      copy: "Copy",
       empty: "No scoped links",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      expiresAt: "Expires {time}",
+      never: "Never expires",
       disable: "Disable",
       enable: "Enable"
     },
     recycle: {
       title: "Recycle bin",
-      desc: "Keeps at most 50 deleted configuration records. Restore never overwrites an existing ID.",
+      desc: "Keeps the 50 most recently deleted items. Restoring never overwrites an existing ID.",
       empty: "Recycle bin is empty",
+      deletedAt: "Deleted {time}",
       restore: "Restore",
-      purge: "Delete permanently"
+      purge: "Delete permanently",
+      purgeTitle: "Delete permanently",
+      purgeContent: "Permanently delete {name}? This cannot be undone."
     },
     notify: {
       converted: "Conversion complete",
       copied: "Copied",
       shareCreated: "Share link created",
+      restored: "Restored",
       failed: "Operation failed\n{e}"
     }
   },
   notFoundPage: {
     title: "Oops! URL Error!",
     desc: "Back to Home Page",
-    backendDesc: "If you are seeing this, it is probably due to a routing interception issue on the front end of your browser. You can force a refresh to see it or use the link directly without affecting the use of this link."
+    backendDesc: "The browser's page router intercepted this link. Force-refresh the page or open the link directly; the link itself still works."
   },
   subPage: {
     import: {
@@ -115,17 +138,17 @@ export default {
       tipsTitle: "Import subscription config",
       tipsContent: "Import a JSON config for one source or collection. Use backup restore on the Settings page for full config migration."
     },
-    addSubTitle: "Choose Subscription type",
-    previewTitle: "Copy/Preview a subscription",
+    addSubTitle: "Choose what to create",
+    previewTitle: "Preview or copy subscription",
     tag: {
       addTagTitle: "Add Tag",
       tagPlaceholder: "Please enter tag name",
       addTagBtn: "+ New Tag"
     },
     emptySub: {
-      title: "You have no Subscription yet",
+      title: "No subscriptions yet",
       desc: "Add a remote subscription or local node text to start aggregating.",
-      btn: "Create Subscription Now"
+      btn: "Create subscription"
     },
     onboarding: {
       welcome: "First run",
@@ -177,17 +200,17 @@ export default {
       flow: "Usage / Total",
       showRemainingFlow: "Remaining / Total",
       expires: "Expires",
-      remainingDays: "Remaining Reset Days",
+      remainingDays: "Days until reset",
       remainingDaysUnit: "",
       noRecord: "Refresh to get usage",
-      noFlow: "No flow",
+      noFlow: "Usage info disabled",
       noFlowInfo: "No flow info",
       flowError: "Failed to get usage",
       noExpiresInfo: "No expires info"
     },
     deleteItem: {
       title: "Delete",
-      desc: "Are you sure to delete {displayName}? \nDeleted cannot be restored!",
+      desc: "Delete {displayName}?\nIt will be moved to the recycle bin on the Tools page.",
       succeedNotify: "Successfully deleted!",
       btn: {
         confirm: "Delete",
@@ -207,7 +230,7 @@ export default {
     exportConfigNotify: {
       loading: "Exporting...",
       succeed: "Successfully exported config!",
-      failed: "Failed to exporte config!\n{e}"
+      failed: "Failed to export config!\n{e}"
     },
     panel: {
       general: "General",
@@ -266,12 +289,12 @@ export default {
         leaveCancel: "Continue Editing",
         leaveConfirm: "Leave",
         leaveConfirmTitle: "Unsaved Changes",
-        leaveContent: "Unsave changes will be lost without saving.\n\nDo you want to leave editing?",
+        leaveContent: "Unsaved changes will be lost.\n\nLeave the editor anyway?",
         clickTag: {
           title: "Click Tag To Edit",
           content: "There is unsaved content in the input box. Now editing other tags will lose the unsaved content\n\nPlease confirm?",
-          confirm: "confirm",
-          cancel: "cancel"
+          confirm: "Confirm",
+          cancel: "Cancel"
         }
       },
       basic: {
@@ -287,11 +310,11 @@ export default {
         },
         remark: {
           label: "Remarks",
-          placeholder: "The remarks"
+          placeholder: "Optional note shown on the card"
         },
         displayName: {
           label: "Display Name",
-          placeholder: "The display name"
+          placeholder: "Name shown in the list"
         },
         subInfoUrl: {
           label: "Sub Info URL",
@@ -307,7 +330,7 @@ export default {
         },
         tag: {
           label: "Tag(s)",
-          placeholder: "Click on the right icon, The tag(s) (separated by comma) will be used for grouping."
+          placeholder: "Comma-separated tags used for grouping"
         },
         template: {
           label: "Rule Template",
@@ -322,7 +345,7 @@ export default {
           local: "Local",
           mergeSources: "Merge Sources",
           noMerge: "Disabled",
-          localFirst: "Local Fist",
+          localFirst: "Local First",
           remoteFirst: "Remote First"
         },
         url: {
@@ -368,7 +391,7 @@ export default {
         },
         icon: {
           label: "Icon",
-          placeholder: "Click on the left or top icon, fill in the icon link from the icon library, do not use jpg."
+          placeholder: "Icon image URL (PNG or SVG)"
         },
         isIconColor: {
           label: "Custom Icon Use Original Color"
@@ -382,7 +405,7 @@ export default {
         },
         ua: {
           label: "User-Agent",
-          placeholder: "The User-Agent for downloading resource(s)",
+          placeholder: "User-Agent for fetching this source; blank uses the default",
           placeholderDisabled: "Disable custom UA when passing through",
           tips: {
             title: "Uses the global UA by default",
@@ -398,9 +421,9 @@ export default {
           }
         },
         firstSubFlow: {
-          label: "Pass Through Single Subscription Traffic Info",
+          label: "Use the first source's usage info",
           tips: {
-            title: "Pass Through Single Subscription Traffic Info",
+            title: "Use the first source's usage info",
             content: "A collection passes through usage info from the first source by default. To show aggregate usage, fill subscription-userinfo manually on the related source or use a dedicated flowUrl.",
             okText: "OK"
           }
@@ -411,7 +434,7 @@ export default {
         },
         proxy: {
           label: "Proxy/Policy",
-          placeholder: "The proxy/node/policy for downloading resource(s)"
+          placeholder: "Proxy or policy for fetching remote resources; blank uses the default"
         }
       },
       commonOptions: {
@@ -710,7 +733,7 @@ export default {
   },
   myPage: {
     profile: {
-      desc: "Subscription aggregation, node processing, and cloud rule templates",
+      desc: "Subscription aggregation, node processing, and rule templates on Cloudflare",
       runtime: "Runtime",
       storage: "Storage",
       version: "Version"
@@ -752,17 +775,25 @@ export default {
     },
     request: {
       title: "Request Settings",
+      desc: "Controls how the Worker fetches remote subscriptions. Changes apply to the next download or preview.",
       defaultUserAgent: "Default User-Agent",
       defaultFlowUserAgent: "Usage-info User-Agent",
-      defaultTimeout: "Request timeout in milliseconds",
+      defaultTimeout: "Request timeout (ms)",
       backendRequestConcurrency: "Remote subscription concurrency",
-      backendRequestConcurrencyWaitTime: "Wait time between concurrent requests in milliseconds",
-      remoteCacheTtl: "Remote subscription edge-cache TTL in seconds; 0 disables it",
-      remoteCacheStaleOnError: "Use the latest edge cache when a remote source fails",
-      nodeInfoApiUrl: "HTTPS node-info API URL containing {ip}",
-      summary: "Remote subscription concurrency is {concurrency}; timeout is {timeout}ms."
+      backendRequestConcurrencyWaitTime: "Delay between concurrent requests (ms)",
+      remoteCacheTtl: "Remote cache TTL (s, 0 = off)",
+      remoteCacheStaleOnError: "Serve the last cached copy when a remote source fails",
+      subrequestLimit: "Subrequest limit per request",
+      nodeInfoApiUrl: "Node-info API (HTTPS, must contain {'{ip}'})",
+      unlimited: "Blank = no limit",
+      rangeHint: "{min}–{max}",
+      rangeError: "Enter a whole number from {min} to {max}",
+      nodeInfoApiUrlError: "Must be an HTTPS URL containing {'{ip}'}",
+      required: "Required",
+      invalid: "Some request settings are invalid. Check the highlighted fields."
     },
     btn: {
+      reset: "Reset",
       cancel: "Cancel",
       edit: "Edit",
       save: "Save",

@@ -14,7 +14,7 @@
 
   const height = computed(() => {
     if (shouldShowTabBar.value) {
-      return 'calc(56px + env(safe-area-inset-bottom))';
+      return 'calc(var(--tab-bar-height) + env(safe-area-inset-bottom))';
     } else {
       return '16px';
     }

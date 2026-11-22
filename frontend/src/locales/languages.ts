@@ -1,4 +1,5 @@
-export const DEFAULT_LOCALE = "zh";
+// 没有保存的选择、浏览器语言也不是中文时使用的语言
+export const DEFAULT_LOCALE = "en";
 
 export const SUPPORTED_LOCALES = [
   {
@@ -19,18 +20,25 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]["key"];
 
 const SUPPORTED_LOCALE_KEYS = SUPPORTED_LOCALES.map((locale) => locale.key);
 
-export const normalizeLocale = (value?: string | null): SupportedLocale => {
+const matchLocale = (value?: string | null): SupportedLocale | undefined => {
   const localePrefix = String(value || "")
     .toLowerCase()
     .split(/[-_]/)[0];
 
   return SUPPORTED_LOCALE_KEYS.includes(localePrefix as SupportedLocale)
     ? (localePrefix as SupportedLocale)
-    : DEFAULT_LOCALE;
+    : undefined;
 };
 
+export const normalizeLocale = (value?: string | null): SupportedLocale => {
+  return matchLocale(value) || DEFAULT_LOCALE;
+};
+
+// 优先级：用户保存的选择 > 浏览器语言为中文（zh-*）时用中文 > 英文
 export const getInitialLocale = (): SupportedLocale => {
-  return normalizeLocale(localStorage.getItem("locale") || navigator.language);
+  const saved = matchLocale(localStorage.getItem("locale"));
+  if (saved) return saved;
+  return String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
 };
 
 export const getLocaleConfig = (locale?: string | null) => {

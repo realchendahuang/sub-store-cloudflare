@@ -176,16 +176,17 @@
             >
               <font-awesome-icon icon="fa-solid fa-pen-nib" />
             </button>
-            <!-- 打开侧边栏 -->
+            <!-- 更多操作：所有设备都用弹出菜单；触屏设备另外保留左滑手势 -->
             <button
-              v-if="!isMobile()"
               ref="moreAction"
               class="copy-sub-link"
+              aria-haspopup="menu"
+              :aria-expanded="moreMenuVisible"
               :aria-label="t('subPage.actions.moreActions')"
               :title="t('subPage.actions.moreActions')"
-              @click.stop="swipeController"
+              @click.stop="toggleMoreMenu"
             >
-              <font-awesome-icon icon="fa-solid fa-angles-right" />
+              <font-awesome-icon icon="fa-solid fa-ellipsis-vertical" />
             </button>
           </div>
         </div>
@@ -342,6 +343,30 @@
     </template>
   </nut-swipe>
 
+  <!-- 弹出菜单挂到 body：卡片自身 overflow:hidden，不能在卡片内渲染 -->
+  <Teleport to="body">
+    <div
+      v-if="moreMenuVisible"
+      ref="moreMenu"
+      class="sub-item-more-menu"
+      role="menu"
+      :style="moreMenuStyle"
+      @click.stop
+    >
+      <button
+        v-for="action in moreMenuActions"
+        :key="action.key"
+        class="more-menu-item"
+        :class="{ 'is-danger': action.danger }"
+        role="menuitem"
+        @click="action.handler"
+      >
+        <font-awesome-icon :icon="action.icon" />
+        <span>{{ action.label }}</span>
+      </button>
+    </div>
+  </Teleport>
+
   <CompareTable
     v-if="compareTableIsVisible"
     :name="name"
@@ -379,7 +404,7 @@ import { useClipboard } from "@vueuse/core";
 import axios from "axios";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
-import { computed, ref, toRaw } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, toRaw } from "vue";
 import useV3Clipboard from "vue-clipboard3";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -395,7 +420,6 @@ import { useSettingsStore } from "@/store/settings";
 import { useSubsStore } from "@/store/subs";
 import { getDownloadLink } from "@/utils/downloadLink";
 import { getString } from "@/utils/flowTransfer";
-import { isMobile } from "@/utils/isMobile";
 import CompareTable from "@/views/CompareTable.vue";
 
 const props = defineProps<{
@@ -776,54 +800,66 @@ const refreshCompare = async () => {
     Toast.hide("compare");
   }
 };
-const swipeClose = () => {
-  swipe.value.close();
-};
-const swipeController = () => {
-  if (swipeIsOpen.value) {
-    swipe.value.close();
-    swipeIsOpen.value = false;
-    if (moreAction.value) moreAction.value.style.transform = "rotate(0deg)";
+// 更多操作弹出菜单：nut-swipe 只响应 touch 事件，鼠标与触屏笔记本无法左滑，
+// 因此所有设备都提供菜单入口，触屏设备仍可左滑
+const moreMenuVisible = ref(false);
+const moreMenu = ref<HTMLElement>();
+const moreMenuStyle = ref<Record<string, string>>({});
+const MORE_MENU_GAP = 6;
+const MORE_MENU_EDGE = 8;
 
-    document.removeEventListener('click', handleGlobalClick);
-  } else {
-    if (appearanceSetting.value.isLeftRight) {
-      swipe.value.open("right");
-      setTimeout(() => {
-        swipeIsOpen.value = true;
-        setTimeout(() => {
-          document.addEventListener('click', handleGlobalClick);
-        }, 10);
-      }, 100);
-    } else {
-      swipe.value.open("left");
-      setTimeout(() => {
-        swipeIsOpen.value = true;
-        if (moreAction.value) moreAction.value.style.transform = "rotate(180deg)";
+const placeMoreMenu = async () => {
+  await nextTick();
+  const trigger = moreAction.value as HTMLElement | undefined;
+  const menu = moreMenu.value;
+  if (!trigger || !menu) return;
 
-        setTimeout(() => {
-          document.addEventListener('click', handleGlobalClick);
-        }, 10);
-      }, 100);
-    }
-  }
+  const triggerRect = trigger.getBoundingClientRect();
+  const { width, height } = menu.getBoundingClientRect();
+  // 右对齐触发按钮；空间不足时向上展开，并保证不超出视口
+  const left = Math.min(
+    Math.max(triggerRect.right - width, MORE_MENU_EDGE),
+    window.innerWidth - width - MORE_MENU_EDGE,
+  );
+  const fitsBelow = triggerRect.bottom + MORE_MENU_GAP + height <= window.innerHeight - MORE_MENU_EDGE;
+  const top = fitsBelow
+    ? triggerRect.bottom + MORE_MENU_GAP
+    : Math.max(triggerRect.top - MORE_MENU_GAP - height, MORE_MENU_EDGE);
+  moreMenuStyle.value = { left: `${left}px`, top: `${top}px` };
 };
 
-const handleGlobalClick = (event) => {
-  const swipeRightEl = document.querySelector('.nut-swipe__right');
-  const swipeLeftEl = document.querySelector('.nut-swipe__left');
+const closeMoreMenu = () => {
+  if (!moreMenuVisible.value) return;
+  moreMenuVisible.value = false;
+  document.removeEventListener("click", closeMoreMenu);
+  document.removeEventListener("keydown", onMoreMenuKeydown);
+  window.removeEventListener("resize", closeMoreMenu);
+  window.removeEventListener("scroll", closeMoreMenu, true);
+};
 
-  if ((swipeRightEl && swipeRightEl.contains(event.target)) ||
-      (swipeLeftEl && swipeLeftEl.contains(event.target))) {
+const onMoreMenuKeydown = (event: KeyboardEvent) => {
+  if (event.key === "Escape") closeMoreMenu();
+};
+
+const toggleMoreMenu = async () => {
+  if (moreMenuVisible.value) {
+    closeMoreMenu();
     return;
   }
-
-  swipe.value.close();
-  swipeIsOpen.value = false;
-  if (moreAction.value) moreAction.value.style.transform = "rotate(0deg)";
-
-  document.removeEventListener('click', handleGlobalClick);
+  moreMenuVisible.value = true;
+  await placeMoreMenu();
+  // 等当前这次点击冒泡结束后再监听，避免立刻被关闭
+  setTimeout(() => {
+    if (!moreMenuVisible.value) return;
+    document.addEventListener("click", closeMoreMenu);
+    document.addEventListener("keydown", onMoreMenuKeydown);
+    window.addEventListener("resize", closeMoreMenu);
+    window.addEventListener("scroll", closeMoreMenu, true);
+  }, 0);
 };
+
+onBeforeUnmount(closeMoreMenu);
+
 
 const onDeleteConfirm = async () => {
   await subsStore.deleteItem(props.type, name, "permanent");
@@ -837,7 +873,6 @@ const setIsMoveOpen = () => {
 
   setTimeout(() => {
     swipeIsOpen.value = true;
-    if (moreAction.value) moreAction.value.style.transform = "rotate(180deg)";
   }, 100);
 
   setTimeoutTF();
@@ -864,7 +899,6 @@ const handleContentClick = (event) => {
   if (swipeIsOpen.value) {
     swipe.value.close();
     swipeIsOpen.value = false;
-    if (moreAction.value) moreAction.value.style.transform = "rotate(0deg)";
     return;
   }
 
@@ -881,12 +915,10 @@ const closeExpandedMenu = () => {
   swipe.value.close();
   swipeIsOpen.value = false;
   itemMenuVisible.value = false;
-  if (moreAction.value) moreAction.value.style.transform = "rotate(0deg)";
-  document.removeEventListener("click", handleGlobalClick);
+  closeMoreMenu();
 };
 
 const onClickCopyConfig = async () => {
-  // 移除 swipeController() 调用，保持左滑状态
   let data: Sub | Collection;
   switch (props.type) {
     case "sub":
@@ -929,6 +961,31 @@ const onClickCopyConfig = async () => {
 const onClickEdit = () => {
   router.push(`/edit/${props.type}s/${encodeURIComponent(name)}`);
 };
+
+const moreMenuActions = computed(() => [
+  {
+    key: "clone",
+    icon: "fa-solid fa-paste",
+    label: t("subPage.actions.cloneConfig"),
+    handler: onClickCopyConfig,
+  },
+  {
+    key: "download",
+    icon: "fa-solid fa-file-export",
+    label: t("subPage.actions.openDownload"),
+    handler: onClickOpenDownload,
+  },
+  {
+    key: "delete",
+    icon: "fa-solid fa-trash-can",
+    label: t("subPage.actions.delete"),
+    danger: true,
+    handler: () => {
+      closeMoreMenu();
+      onClickDelete();
+    },
+  },
+]);
 
 const onClickDelete = () => {
   Dialog({
@@ -1259,7 +1316,53 @@ const refreshSubFlowsIfNeeded = async (force = false) => {
         border-radius: 50%;
         height: 46px;
         width: 44px;
+        // 全局 .nut-button 带 margin-right，会让滑出面板变宽而被卡片裁掉
+        margin-right: 0;
       }
+    }
+  }
+}
+
+.sub-item-more-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 180px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--divider-color);
+  border-radius: var(--item-card-radios);
+  background: var(--popup-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  .more-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--primary-text-color);
+    font-size: 14px;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      color: var(--comment-text-color);
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--divider-color);
+    }
+
+    &.is-danger,
+    &.is-danger svg {
+      color: var(--danger-color, #e2231a);
     }
   }
 }

@@ -26,7 +26,9 @@
           @click="router.push('/tools')"
           @keydown.enter="router.push('/tools')"
         >
-          <nut-icon name="more-x" size="22px" />
+          <div class="icon-container">
+            <font-awesome-icon class="menu-icon" icon="fa-solid fa-toolbox" />
+          </div>
           <span class="label" v-show="isExpanded">{{ $t('tabBar.tools') }}</span>
         </div>
 
@@ -113,17 +115,9 @@ const { navBarHeight } = storeToRefs(systemStore);
     backdrop-filter: blur(var(--tab-bar-blur, 20px));
     -webkit-backdrop-filter: blur(var(--tab-bar-blur, 20px));
 
-    // Anchor purely to the left of the .page-body
-    left: calc(50vw - 315px);
+    // 紧贴 .page-body 左侧，宽度与 --content-max-width 保持同步
+    left: calc(50vw - var(--content-max-width) / 2);
     transform: translateX(-100%);
-  }
-
-  @media screen and (min-width: 900px) {
-    left: calc(50vw - 350px);
-  }
-
-  @media screen and (min-width: 1200px) {
-    left: calc(50vw - 450px);
   }
 
   &.is-expanded {
@@ -168,6 +162,12 @@ const { navBarHeight } = storeToRefs(systemStore);
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    // 与 nut-icon（22px）保持同样的占位，折叠成纯图标时不留空缺
+    .menu-icon {
+      width: 22px;
+      height: 22px;
     }
 
     .label {

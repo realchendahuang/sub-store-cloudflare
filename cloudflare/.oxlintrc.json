@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "env": {
+    "es2022": true,
+    "worker": true,
+    "node": true
+  },
+  "rules": {
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-unnecessary-type-parameters": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-redundant-type-constituents": "warn",
+    "typescript/restrict-template-expressions": "off",
+    "vitest/valid-expect": "off",
+    "eslint/no-control-regex": "off",
+    "eslint/no-misleading-character-class": "off",
+    "eslint/no-useless-escape": "off",
+    "unicorn/no-new-array": "off",
+    "unicorn/no-useless-fallback-in-spread": "off"
+  },
+  "ignorePatterns": ["dist/**", ".wrangler/**", "src/generated/**", "src/worker-configuration.d.ts"]
+}

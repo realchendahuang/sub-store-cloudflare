@@ -20,6 +20,8 @@ interface SettingsPostData {
   backendRequestConcurrencyWaitTime?: string;
   remoteCacheTtl?: string;
   remoteCacheStaleOnError?: boolean;
+  /** 单次请求的子请求上限；空字符串表示不限制（后端校验范围 10-1000） */
+  subrequestLimit?: string;
   nodeInfoApiUrl?: string;
   theme?: {
     auto: boolean;

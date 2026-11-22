@@ -72,6 +72,8 @@ declare module 'vue-router' {
     supportsListViewMode?: boolean;
     supportsListSearch?: boolean;
     hideSideBarInWideScreenNarrowMode?: boolean;
+    /** 宽屏下把内容区限制在编辑页的舒适宽度 */
+    limitContentWidth?: boolean;
   }
 }
 
@@ -129,6 +131,7 @@ const router = createRouter({
             title: 'subEditor',
             needTabBar: false,
             needNavBack: true,
+            limitContentWidth: true,
           },
         },
       ],

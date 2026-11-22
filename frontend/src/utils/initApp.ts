@@ -14,6 +14,7 @@ type InitStoresOptions = {
 };
 
 export const initStores = async (
+  /** 仅用户显式点击刷新时为 true；自动加载（启动、路由、保存后同步）必须传 false */
   needNotify: boolean,
   needFetchFlow: boolean,
   options: InitStoresOptions = {},

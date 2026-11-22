@@ -36,22 +36,10 @@
   backdrop-filter: blur(var(--nav-bar-blur));
   -webkit-backdrop-filter: blur(var(--nav-bar-blur));
   color: var(--primary-text-color);
-
-  @media screen and (min-width: 600px) {
-    max-width: 85%;
-  }
+  max-width: var(--content-max-width);
 
   @media screen and (min-width: 768px) {
-    max-width: 630px;
     border-radius: var(--item-card-radios);
-  }
-
-  @media screen and (min-width: 900px) {
-    max-width: 700px;
-  }
-
-  @media screen and (min-width: 1200px) {
-    max-width: 900px;
   }
 
   .editor-section-tab-list {
